@@ -1,0 +1,12 @@
+ComputeVarCriteria<-function(pred.prob,truegroups,thres=0.5){
+#library(AUC)
+Trueval=which(truegroups==1);
+TrueNeg=which(truegroups==0);
+FPR=length(intersect(which(pred.prob>=thres),TrueNeg))*100/length(TrueNeg);
+FNR=length(intersect(which(pred.prob<thres),Trueval))*100/length(Trueval);
+Precision=length(intersect(which(pred.prob>=thres),Trueval))*100/sum(pred.prob>=thres);
+TPR=length(intersect(which(pred.prob>=thres),Trueval))*100/length(Trueval);
+F1=2*TPR*(Precision)/(TPR+Precision)
+AUC1=AUC::auc(AUC::roc(pred.prob,as.factor(truegroups)))
+list(FalsePosRate=FPR,FalseNegRate=FNR,F1measure=F1,AUC=AUC1)
+}
