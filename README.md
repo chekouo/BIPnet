@@ -1,11 +1,11 @@
 # BIPnet
 
 
-# This is the backpay package
+ This is the BIPnet package
 
-# License: GPL
+ License: GPL
 
-# For more information please contact thierry.chekouotekou@ucalgary.ca
+ For more information please contact thierry.chekouotekou@ucalgary.ca
 
 # Installation
 
