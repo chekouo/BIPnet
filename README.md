@@ -5,7 +5,7 @@
 
  License: GPL
 
- For more information please contact thierry.chekouotekou@ucalgary.ca
+ For more information please contact tchekouo@umn.edu
 
 # Installation
 
