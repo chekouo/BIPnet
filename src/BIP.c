@@ -82,7 +82,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	}
 	*/
 	_Bool ***Path = malloc(Np * sizeof(_Bool **));
-	int m1 = 0; //_Bool pp=0;
+	//int m1 = 0; //_Bool pp=0;
 	int kk = 0;
 	for (m = 0; m < Np; m++)
 	{
@@ -103,7 +103,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 					// Path[m][j][k]=pp;
 				}
 			}
-			m1 += 1;
+		//	m1 += 1;
 		}
 		else if (IndVar[m] == 2)
 		{ // covariates
@@ -191,7 +191,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	double **loggauss = malloc(Np * sizeof(double *));
 	double **s2 = malloc(Np * sizeof(double *));
 	double **s2Mean = malloc(Np * sizeof(double *));
-	int mj = 0;
+	//int mj = 0;
 	for (m = 0; m < Np; m++)
 	{
 		Gamvs[m] = malloc(P[m] * sizeof(double));
@@ -307,7 +307,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			s2[m][j] = 0.1;
 			s2Mean[m][j] = 0;
 			quadForm[m][j] = Gamvs[m][j] = 0; // GamvsK[m][j]=0;
-			mj += 1;
+			//mj += 1;
 		}
 	}
 
@@ -338,12 +338,12 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			double sumrho = 0;
 			for (l = 0; l < r; l++)
 			{
-				double sumeta = 0;
+				//double sumeta = 0;
 				sumrho += rhoest[m][l];
-				for (j = 0; j < P[m]; j++)
-				{
-					sumeta += Gam[m][j][l];
-				}
+				//for (j = 0; j < P[m]; j++)
+				//{
+				//	sumeta += Gam[m][j][l];
+			//	}
 				// qv[m][l]=gsl_ran_beta (rr, alv+rhoest[m][l]*sumeta, blv+rhoest[m][l]*(P[m]-sumeta));
 				if (IndVar[m] == 2)
 					qv[m][l] = 1;
@@ -534,7 +534,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	for (t = 0; t < countmodel; t++)
 	{
 		int rm = 0;
-		int sumg = 0;
+		//int sumg = 0;
 		for (m = 0; m < Np; m++)
 		{
 
@@ -554,7 +554,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				{
 					Gam[m][j][l] = UniqModel[t][rm];
 					rm++;
-					sumg += Gam[m][j][l];
+					//sumg += Gam[m][j][l];
 				}
 			}
 		}
