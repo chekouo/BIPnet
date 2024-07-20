@@ -366,14 +366,14 @@ void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, do
          /* Within move*/
          if (rho[l] == 1)
          {
-            double logpostold = 0;
+           // double logpostold = 0;
             double *quadForm1 = malloc(p * sizeof(double));
             double *loggausnew1 = malloc(p * sizeof(double));
             double quad1, quad2;
             double loggaussold, loggaussnew;
             for (j = 0; j < p; j++)
             {
-               logpostold += loggauss[j];
+            //   logpostold += loggauss[j];
                logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad1, Gam[j], &loggaussold);
                Gamnew[j][l] = 1 - Gam[j][l];
                logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad2, Gamnew[j], &loggaussnew);
