@@ -2,7 +2,7 @@ library(MASS)
 #dyn.load("~/projects/def-chekouo/chekouo/BayesianFA/CallfromR/BayesianFA.so")
 
 BIP <- function(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4, sample=5000, burnin=1000,nbrmaxmodels=50,
-		  priorcompselv=c(1,1),priorcompselo=c(1,1),priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=0.05) {
+		  priorcompselv=c(1,1),priorcompselo=c(1,1),priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=0.05,chainNbr=1) {
        
 if (sample<=burnin){
 stop("Argument burnin must be smaller than sample: the number of MCMC iterations.")
@@ -74,7 +74,8 @@ result <- .C("mainfunction",
 	       EstU=as.double(rep(0,n*nbrcomp)),EstSig2=as.double(rep(0,sum(P))),InterceptMean=as.double(rep(0,1)),
 	       EstLoadMod=as.double(rep(0,nbrmaxmodels*nbrcomp*sum(P))),EstLoad=as.double(rep(0,nbrcomp*sum(P))),
 	       nbrmodel1=as.integer(0),postgam=rep(0,nbrmaxmodels),priorcompsel=priorcompselv,
-	       priorcompselo=priorcompselo,priorb0=priorb0,priorb=as.double(priorb),priorgrpsel=priorgrpsel,probvarsel=as.double(probvarsel));
+	       priorcompselo=priorcompselo,priorb0=priorb0,priorb=as.double(priorb),priorgrpsel=priorgrpsel,
+		probvarsel=as.double(probvarsel),chainNbr=as.integer(chainNbr));
 
 
 

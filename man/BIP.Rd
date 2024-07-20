@@ -11,15 +11,15 @@ The method can incorporate clinical covariates, clinical response variables and 
 \usage{
 BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4, 
     sample=5000, burnin=1000,nbrmaxmodels=50,priorcompselv=c(1,1),priorcompselo=c(1,1),
-    priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=0.05)
+    priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=0.05,chainNbr=1)
 }
 
 \arguments{
-	\item{dataList}{ List of data sets: If M is the number of omics data types, then this list isof length M+1. Otherwise, if we include the covariate set, then its of length M+2. Each omics dataset object is a data matrix  measured in a set of n samples. For each omics matrix, the rows represent samples, and the columns represent genomic features. 
+	\item{dataList}{ List of data sets: If M is the number of omics data types, then this list is of length M+1. Otherwise, if we include the covariate set, then its of length M+2. Each omics dataset object is a data matrix  measured in a set of n samples. For each omics matrix, the rows represent samples, and the columns represent genomic features. 
 	}
-	\item{IndicVar}{ This outputs indicates which type of variables. For inctance, if IndicVar=c(0,0,1,2), the first two variable are omicds data that would require variable selection, the third variable is the response variable and the fourth is the set of clinical covariates.}
+	\item{IndicVar}{ This outputs indicates which type of variables. For inctance, if IndicVar=c(0,0,1,2), the first two variable are omics data that would require variable selection, the third variable is the response variable and the fourth is the set of clinical covariates.}
 
-	\item{groupList}{ List of groups of lenght M for each omics data. For each omics data type l, group is a matrix \eqn{ P_l \times K_l} where \eqn{P_l} is the number of features, \eqn{K_l} is the number of groups and each entry is either 1 or 0, with 1 if the feature belongs to the corresponding group. If Method="BIP", then groupList=NULL, the default value. 
+	\item{groupList}{ List of groups of length M for each omics data. For each omics data type l, group is a matrix \eqn{ P_l \times K_l} where \eqn{P_l} is the number of features, \eqn{K_l} is the number of groups and each entry is either 1 or 0, with 1 if the feature belongs to the corresponding group. If Method="BIP", then groupList=NULL, the default value. 
 	}
 	\item{Method}{ Method is either BIPnet (with network information) or BIP (withouth network information)}
 	\item{nbrcomp}{ Number of components of the shared components}
@@ -29,11 +29,12 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 	}
 	\item{nbrmaxmodels}{ Number maximum of models for prediction}
 	\item{priorcompselv}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting components}
-\item{priorcompselo}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting the response on a component.}
+\item{priorcompselo}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting a component associated with the response.}
 \item{priorb0}{ Hyperparameters of a gamma distribution; prior distribution of the paramater \eqn{b_{l0}} that controls the shrinkage of loadings when there is no grouping information }
 \item{priorb}{ Hyperparameters of a gamma distribution; prior distribution of group effect coefficients \eqn{b_{lj}}, \eqn{j=1,...,K_l}.} 
 \item{priorgrpsel}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting groups.}
 \item{probvarsel}{ Prior probability for variable selection}
+\item{chainNbr}{ MCMC chain number. The default is 1 for one MCMC number 1. If you want to run N multiple MCMC chains, make a loop in R as for ( i in 1:N)  BIP(...,chainNbr=i)}
 }
 \details{
 	The function will return several R objects, which can be assigned to a variable. To see the results, use the ``$" operator. 
@@ -49,7 +50,7 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 }
 
 \references{
- Author names (2020), \emph{Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease}, \emph{submitted}.
+ Thierry Chekouo and Sandra Safo (2023), Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease, \emph{Biostatistics}, , Volume 24, Issue 1.
 }
 
 \seealso{

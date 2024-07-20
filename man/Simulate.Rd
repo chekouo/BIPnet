@@ -24,7 +24,7 @@ Simulate(scenario=1,setting=NULL,overlap=NULL,seed=1)
 The function will return two data matrix X1 and X2, an estimated response Y, shared component matrix U, loadings A1 and A2, and the grouping information (Group1 and Group2)
 }
 \references{
-	   Author names (2020), \emph{Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease}, \emph{submitted}.
+ Thierry Chekouo and Sandra Safo (2023), Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease, \emph{Biostatistics}, , Volume 24, Issue 1.
 }
 
 \examples{

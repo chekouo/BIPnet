@@ -2,9 +2,9 @@ Package: BIPnet
 Type: Package
 Title: BIPnet: A Bayesian integrative approach with incorporation of network information
 Version: 1.0
-Date: 2020-04-10
+Date: 2024-07-20
 Author: Thierry Chekouo and Sandra Safo
-Maintainer: Thierry Chekouo <thierry.chekouotekou@ucalgary.ca>
+Maintainer: Thierry Chekouo <tchekouo@umn.edu>
 Description: The BIPnet package implements an MCMC algorithm for a Bayesian analysis that integrates multi-omics data types, clinical covariates and clinical response variables. 
 SystemRequirements: GSL (GNU Scientific Library)
 License: GPL (>= 2.0)

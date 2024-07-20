@@ -24,7 +24,7 @@ BIPpredict(dataListNew=dataListNew,Result=Result,meth="BMA")
 The function will return both predicted responses and predicted shared latent components on a test data.
 }
 \references{
-	 Author names (2020), \emph{Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease}, \emph{submitted}.
+ Thierry Chekouo and Sandra Safo (2023), Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease, \emph{Biostatistics}, , Volume 24, Issue 1.
 }
 \examples{
 ### We run Scenario 1-Setting 1 in the manuscript

@@ -24,5 +24,5 @@ ComputeVarCriteria(pred.prob,truegroups,thres=0.5)
 The function returns FPR, FNR, F1 and AUC.
 }
 \references{
-	 Author names (2020), \emph{Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease}, \emph{submitted}.
+ Thierry Chekouo and Sandra Safo (2023), Bayesian Integrative Analysis and Prediction with Application to Atherosclerosis Cardiovascular Disease, \emph{Biostatistics}, , Volume 24, Issue 1.
 }
