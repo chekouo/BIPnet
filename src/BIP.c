@@ -33,10 +33,10 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	setvbuf(stdout, NULL, _IONBF, 0);
 	int Method = Method1[0];
 	if (Method == 1)
-		printf("\nThe Method is GroupInfo\n");
+		printf("\nThe Method is BIP with network information\n");
 	else if (Method == 0)
 	{
-		printf("The Method is NoGroupInfo\n");
+		printf("The Method is BIP without network information\n");
 	}
 	int i, l, j, k;
 	int m;
@@ -220,7 +220,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			for (j = 0; j < P[m]; j++)
 				Gammean[m][j][l] = 0;
 			double uni = gsl_ran_flat(rr, 0, 1);
-			qv[m][l] = probvarsel[0];
+			qv[m][l] = probvarsel[m];
 			wg[m][l] = 0.5;		// Prior prob group selection
 			if (IndVar[m] == 1) // Response
 				qv[m][l] = 0.5;

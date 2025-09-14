@@ -11,7 +11,7 @@ The method can incorporate clinical covariates, clinical response variables and 
 \usage{
 BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4, 
     sample=5000, burnin=1000,nbrmaxmodels=50,priorcompselv=c(1,1),priorcompselo=c(1,1),
-    priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=0.05,chainNbr=1)
+    priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=rep(0.05,length(dataList)),chainNbr=1)
 }
 
 \arguments{
@@ -33,7 +33,7 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 \item{priorb0}{ Hyperparameters of a gamma distribution; prior distribution of the paramater \eqn{b_{l0}} that controls the shrinkage of loadings when there is no grouping information }
 \item{priorb}{ Hyperparameters of a gamma distribution; prior distribution of group effect coefficients \eqn{b_{lj}}, \eqn{j=1,...,K_l}.} 
 \item{priorgrpsel}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting groups.}
-\item{probvarsel}{ Prior probability for variable selection}
+\item{probvarsel}{ Prior probability for variable selection for each data type. It's a vector of size the number of data types. Please note that when a data type m is not subject of variable selection (e.g., covariate variables or outcome), then probvarsel[m]=1.}
 \item{chainNbr}{ MCMC chain number. The default is 1 for one MCMC number 1. If you want to run N multiple MCMC chains, make a loop in R as for ( i in 1:N)  BIP(...,chainNbr=i)}
 }
 \details{
@@ -65,7 +65,7 @@ dat=Simulate(scenario=1,setting=1,overlap="yes",seed=1);
 dataList=list(dat$X1,dat$X2,dat$Y)
 PathList=list(dat$Group1,dat$Group2)
 BA=BIP(dataList=dataList,IndicVar=c(0,0,1),groupList=PathList,Method="BIPnet",nbrcomp=4, 
-       sample=5000, burnin=1000);
+       sample=5000, burnin=1000, probvarsel=rep(0.05,length(dataList)));
 TrueVar1=dat$TrueVar1;
 IndicVar=BA$IndicVar;
 Np=length(IndicVar)
