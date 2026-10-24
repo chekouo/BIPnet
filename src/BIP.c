@@ -313,14 +313,13 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 
 	// Dim of a model
 	int dim = 0;
+	// Gam entries for all platforms, plus rho entries for non-response platforms (must match the rhomodel fill below)
 	for (m = 0; m < Np; m++)
 	{
-		for (j = 0; j < P[m]; j++)
-		{
-			dim += P[m] * r;
-		}
+		dim += P[m] * r;
+		if (IndVar[m] != 1)
+			dim += r;
 	}
-	dim += (Np - 1) * r;
 
 	int t;
 	int N = nbrsample + burninsample;

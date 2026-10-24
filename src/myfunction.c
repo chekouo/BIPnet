@@ -656,7 +656,7 @@ void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, doub
                }
                SigmaInv[s * nx1 + s1] = SigmaInv[s1 * nx1 + s] = a / s2[j];
             }
-            SigmaInv[s * nx1 + s] += 1 / (Tau[s][j] * s2[j]);
+            SigmaInv[s * nx1 + s] += 1 / (Tau[NZ1[s]][j] * s2[j]);
          }
          gsl_matrix_view m = gsl_matrix_view_array(SigmaInv, nx1, nx1);
          gsl_linalg_cholesky_decomp(&m.matrix);
@@ -711,7 +711,7 @@ void EstimateLoad(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, do
                }
                SigmaInv[s * nx1 + s1] = SigmaInv[s1 * nx1 + s] = a / s2[j];
             }
-            SigmaInv[s * nx1 + s] += 1 / (Tau[s][j] * s2[j]);
+            SigmaInv[s * nx1 + s] += 1 / (Tau[NZ1[s]][j] * s2[j]);
          }
          gsl_matrix_view m = gsl_matrix_view_array(SigmaInv, nx1, nx1);
          TRY
