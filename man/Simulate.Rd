@@ -9,14 +9,15 @@ Generation of simulated data as explained in the reference manuscript.
 }
 
 \usage{
-Simulate(scenario=1,setting=NULL,overlap=NULL,seed=1)
+Simulate(scenario=1,setting=NULL,overlap=NULL,seed=1,seedA=1)
 }
 
 \arguments{
 	        \item{scenario}{ We have three scenarios as decrisbed in the paper. Scenario 1 has 5 settings, and scenarios 2 and 3 have both two choices: overlap and no overlap.}
 		\item{setting}{ Settings for secnario 1 only. It's a total of 4 settings}
 		\item{overlap}{ If yes, then there are some overlap between components, otherwise, there is no overlap. This input only works when scenario is either 2 or 3.}
-		\item{seed}{ Seed to generate random numbers.}
+		\item{seed}{ Seed to generate the data: latent factors and noise.}
+		\item{seedA}{ Seed to generate the true loadings. Keep it fixed to simulate training and test sets from the same true model with different values of \code{seed}.}
 
 }
 

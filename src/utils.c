@@ -25,6 +25,31 @@ double mean(int n, double *x)
     me += x[i];
   return me / n;
 }
+/* UtX = U'X, where U is n x r and X is n x p; UtX is r x p */
+void crossprod(int n, int r, int p, double **U, double **X, double **UtX)
+{
+  int i, s, j;
+  for (s = 0; s < r; s++)
+    for (j = 0; j < p; j++)
+      UtX[s][j] = 0;
+  for (i = 0; i < n; i++)
+    for (s = 0; s < r; s++)
+    {
+      double u = U[i][s];
+      for (j = 0; j < p; j++)
+        UtX[s][j] += u * X[i][j];
+    }
+}
+/* xx[j] = ||x_j||^2 for each column of the n x p matrix X */
+void colsumsq(int n, int p, double **X, double *xx)
+{
+  int i, j;
+  for (j = 0; j < p; j++)
+    xx[j] = 0;
+  for (i = 0; i < n; i++)
+    for (j = 0; j < p; j++)
+      xx[j] += X[i][j] * X[i][j];
+}
 _Bool compar(int n, _Bool *u, _Bool *v)
 {
   int i;

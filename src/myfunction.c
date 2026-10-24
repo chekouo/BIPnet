@@ -31,7 +31,7 @@ void SampleIntercept(gsl_rng *rr, int n, int r, double *intercept, double *sigma
    double invsig2 = n / sigma2[0] + 1 / sigma20;
    *intercept = (n / (invsig2 * sigma2[0])) * meany + sqrt(1 / invsig2) * gsl_ran_ugaussian(rr);
 }
-void logPostGam(double *logpo, int *IndVar, int Np, int r, int n, int *P, double ***Tau, double **U, double ***X, double **s2, _Bool **rho, _Bool ***Gam, double **qv, double *q)
+void logPostGam(double *logpo, int *IndVar, int Np, int r, int n, int *P, double ***Tau, double **UtU, double ***UtX, double **xx, double **s2, _Bool **rho, _Bool ***Gam, double **qv, double *q)
 {
    double logpost = 0;
    int m, j, l;
@@ -41,7 +41,7 @@ void logPostGam(double *logpo, int *IndVar, int Np, int r, int n, int *P, double
       {
          double logp;
          double quad;
-         logGausQuadForm(j, r, n, P[m], Tau[m], U, X[m], s2[m][j], &quad, Gam[m][j], &logp);
+         logGausQuadForm(j, r, n, Tau[m], UtU, UtX[m], xx[m][j], s2[m][j], &quad, Gam[m][j], &logp);
          logpost += logp;
          for (l = 0; l < r; l++)
          {
@@ -61,70 +61,50 @@ void logPostGam(double *logpo, int *IndVar, int Np, int r, int n, int *P, double
    *logpo = logpost;
 }
 
-void logGausQuadForm(int j, int r, int n, int p, double **Tau, double **U, double **X, double s2, double *quadForm, _Bool *Gam, double *loggauss)
+/* UtU = U'U (r x r), UtX = U'X (r x p) and xx = ||x_j||^2 are precomputed by the caller,
+ * so each call costs O(nx1^3) instead of O(n nx1^2). */
+void logGausQuadForm(int j, int r, int n, double **Tau, double **UtU, double **UtX, double xx, double s2, double *quadForm, _Bool *Gam, double *loggauss)
 {
-   int i, s, s1;
+   int s, s1;
    int NZ1[r];
    int nx1 = 0;
    findc(r, Gam, 0, NZ1, &nx1);
 
    double result = 0;
-   double quadF = 0;
+   double quadF = xx / s2;
    if (nx1 > 0)
    {
-      gsl_vector *work1 = gsl_vector_alloc(nx1);
-      double *Sigma1 = malloc(nx1 * nx1 * sizeof(double));
+      double Sigma1[nx1 * nx1];
+      double y[nx1];
+      double sqs2 = sqrt(s2);
+      double sumT = 0;
+      double logSqrtDet = 0;
       for (s = 0; s < nx1; s++)
       {
          for (s1 = 0; s1 <= s; s1++)
          {
-            double a = 0;
-            for (i = 0; i < n; i++)
-            {
-               // if (Gam[NZ1[s]]*Gam[NZ1[s1]]==1)
-               a += U[i][NZ1[s]] * U[i][NZ1[s1]];
-            }
-            Sigma1[s * nx1 + s1] = Sigma1[s1 * nx1 + s] = a;
+            Sigma1[s * nx1 + s1] = Sigma1[s1 * nx1 + s] = UtU[NZ1[s]][NZ1[s1]];
          }
          Sigma1[s * nx1 + s] += (1.0 / Tau[NZ1[s]][j]);
-         // printf("q1=%lf\n",Tau[NZ1[s]][j]);
+         sumT += log(Tau[NZ1[s]][j]);
+         y[s] = UtX[NZ1[s]][j] / sqs2;
       }
       gsl_matrix_view m1 = gsl_matrix_view_array(Sigma1, nx1, nx1);
-      // printf("Error on Gam\n");
-
       gsl_linalg_cholesky_decomp(&m1.matrix);
-      gsl_vector *xi = gsl_vector_alloc(n);
-      for (i = 0; i < n; i++)
-      {
-         gsl_vector_set(xi, i, X[i][j] / sqrt(s2));
-      }
-
-      gsl_vector *y = gsl_vector_alloc(nx1);
-      double sumT = 0;
+      /* y'(U'U+T^-1)^-1 y = ||L^-1 y||^2 */
+      gsl_vector_view yv = gsl_vector_view_array(y, nx1);
+      gsl_blas_dtrsv(CblasLower, CblasNoTrans, CblasNonUnit, &m1.matrix, &yv.vector);
+      double qy = 0;
+      gsl_blas_ddot(&yv.vector, &yv.vector, &qy);
       for (s = 0; s < nx1; s++)
       {
-         double a = 0;
-         sumT += log(Tau[NZ1[s]][j]);
-         for (i = 0; i < n; i++)
-         {
-            a += U[i][NZ1[s]] * X[i][j] / sqrt(s2);
-         }
-         gsl_vector_set(y, s, a);
+         logSqrtDet += log(Sigma1[s * nx1 + s]);
       }
-      logmultigaussianT(xi, y, &m1.matrix, &result, &quadF, work1);
-      result = result - 0.5 * sumT - (n / 2.0) * log(s2);
-      gsl_vector_free(y);
-      gsl_vector_free(work1);
-      gsl_vector_free(xi);
-      free(Sigma1);
+      quadF -= qy;
+      result = -0.5 * quadF - logSqrtDet - 0.5 * n * log(2.0 * M_PI) - 0.5 * sumT - (n / 2.0) * log(s2);
    }
    else
    {
-      for (i = 0; i < n; i++)
-      {
-         quadF += pow(X[i][j], 2);
-      }
-      quadF = quadF / s2;
       result = -(n / 2.0) * log(s2) - 0.5 * n * log(2.0 * M_PI) - 0.5 * quadF;
    }
    *quadForm = quadF;
@@ -132,13 +112,13 @@ void logGausQuadForm(int j, int r, int n, int p, double **Tau, double **U, doubl
 }
 
 
-double logpost(int r, int n, int p, _Bool *rho, double **Tau, double **U, double **X, double q, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
+double logpost(int r, int n, int p, _Bool *rho, double **Tau, double **UtU, double **UtX, double *xx, double q, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
 {
    double logpostrho = 0;
    int l, j;
    for (j = 0; j < p; j++)
    {
-      logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quadForm[j], Gam[j], &loggauss[j]);
+      logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quadForm[j], Gam[j], &loggauss[j]);
       logpostrho += loggauss[j];
    }
    for (l = 0; l < r; l++)
@@ -148,7 +128,7 @@ double logpost(int r, int n, int p, _Bool *rho, double **Tau, double **U, double
    return logpostrho;
 }
 
-void rho1(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **U, double **X, double q, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
+void rho1(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **UtU, double **UtX, double *xx, double q, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
 {
    int l, j;
    double logpostold = 0;
@@ -167,7 +147,7 @@ void rho1(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **U
    double phi = 0.5;
    _Bool rhonew[r];
    proposal(r, rho, rhonew, phi, rr);
-   double logpostnew = logpost(r, n, p, rhonew, Tau, U, X, q, s2, quadForm1, Gam, loggauss1);
+   double logpostnew = logpost(r, n, p, rhonew, Tau, UtU, UtX, xx, q, s2, quadForm1, Gam, loggauss1);
    double u = gsl_ran_flat(rr, 0, 1);
    if (log(u) < logpostnew - logpostold)
    {
@@ -183,7 +163,7 @@ void rho1(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **U
    }
 }
 
-void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, double **Tau, double **U, double **X, double *q1, double q2, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
+void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, double **Tau, double **UtU, double **UtX, double *xx, double *q1, double q2, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
 {
    int l, j;
    _Bool *rhonew = malloc(r * sizeof(_Bool));
@@ -206,9 +186,9 @@ void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, do
          double loggaussold = 0;
          double loggaussnew = 0;
          Gam[0][l] = 0;
-         logGausQuadForm(0, r, n, p, Tau, U, X, s2[0], &quad1, Gam[0], &loggaussold);
+         logGausQuadForm(0, r, n, Tau, UtU, UtX, xx[0], s2[0], &quad1, Gam[0], &loggaussold);
          Gamnew[0][l] = 1;
-         logGausQuadForm(0, r, n, p, Tau, U, X, s2[0], &quad2, Gamnew[0], &loggaussnew);
+         logGausQuadForm(0, r, n, Tau, UtU, UtX, xx[0], s2[0], &quad2, Gamnew[0], &loggaussnew);
          double rat = loggaussnew + log(q2) - loggaussold - log(1 - q2);
          double uni = gsl_ran_flat(rr, 0, 1);
          // printf("RAT=%.2lf",rat);
@@ -249,9 +229,9 @@ void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, do
                double logmqj = 0;
                logpostold += loggauss[j];
                Gam[j][l] = 0;
-               logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad1, Gam[j], &loggaussold);
+               logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quad1, Gam[j], &loggaussold);
                Gamnew[j][l] = 1;
-               logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad2, Gamnew[j], &loggaussnew);
+               logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quad2, Gamnew[j], &loggaussnew);
                double rat = -loggaussold + loggaussnew + log(q1[l]) - log(1 - q1[l]);
                // printf("%lf ",rat);
                double x1 = loggaussnew + log(q1[l]);
@@ -319,9 +299,9 @@ void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, do
             {
                logpostold += loggauss[j];
                Gamnew[j][l] = 1;
-               logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad1, Gamnew[j], &loggaussn);
+               logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quad1, Gamnew[j], &loggaussn);
                Gamnew[j][l] = 0;
-               logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad1, Gamnew[j], &loggaussnew);
+               logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quad1, Gamnew[j], &loggaussnew);
                if (p != 1)
                {
                   double x1 = loggaussn + log(q1[l]);
@@ -374,9 +354,9 @@ void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, do
             for (j = 0; j < p; j++)
             {
             //   logpostold += loggauss[j];
-               logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad1, Gam[j], &loggaussold);
+               logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quad1, Gam[j], &loggaussold);
                Gamnew[j][l] = 1 - Gam[j][l];
-               logGausQuadForm(j, r, n, p, Tau, U, X, s2[j], &quad2, Gamnew[j], &loggaussnew);
+               logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quad2, Gamnew[j], &loggaussnew);
                double rat = -loggaussold + loggaussnew;
                double uni = gsl_ran_flat(rr, 0, 1);
                if (Gam[j][l] == 0)
@@ -505,6 +485,18 @@ void TauLambda(int l, gsl_rng *rr, int K, int p, double *A, double *B, double B0
    }
 }
 
+/* Path[j]'B for variable j, summed in the same order as the original per-j loop */
+static double groupsum(int K, _Bool *Pathj, double *B)
+{
+   int k1;
+   double kb = 0;
+   for (k1 = 0; k1 < K; k1++)
+   {
+      kb += Pathj[k1] * B[k1];
+   }
+   return kb;
+}
+
 void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *A, double *B, double B0, double *Tau, _Bool **Path, double alphab, double betab, double w, double alpha, double *lambda2, double *s2, double *AcceptR, _Bool **Gam)
 {
    /* K is the number of pathways
@@ -514,7 +506,7 @@ void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *
     * alphab and betab are priors for B effects
     * l is the component index
     */
-   int j, k, k1;
+   int j, k, a;
 
    if (rho == 0)
    {
@@ -529,10 +521,32 @@ void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *
 
       double alphas = 2;
       double betas = 2; // proposal parameters
+      double lgab = gsl_sf_lngamma(alphab);
+      double lgas = gsl_sf_lngamma(alphas);
+      double lbs = log(betas);
+      double lbb = log(betab);
+      double l1w = log(1 - w);
+      double lw = log(w);
+      /* Only variables with Gam[j][l]==1 that belong to group k change the acceptance ratio:
+       * for the others the original terms were exactly zero. kb[a] caches Path[j]'B for the
+       * a-th active variable and is refreshed whenever B[k] changes. */
+      int *act = malloc(p * sizeof(int));
+      double *kb = malloc(p * sizeof(double));
+      int na = 0;
+      for (j = 0; j < p; j++)
+      {
+         if (Gam[j][l] == 1)
+         {
+            act[na] = j;
+            kb[na] = groupsum(K, Path[j], B);
+            na++;
+         }
+      }
       for (k = 0; k < K; k++)
       {
          _Bool Rknew = 0;
          double Bknew = 0;
+         _Bool changed = 0;
          /* Between model move*/
          if (R[k] == 1)
          {
@@ -540,83 +554,77 @@ void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *
             Bknew = 0;
             double lograt = 0;
             double kl = 0;
-            for (j = 0; j < p; j++)
+            for (a = 0; a < na; a++)
             {
-               if (Gam[j][l] == 1)
+               j = act[a];
+               if (Path[j][k])
                {
-                  double kb = 0;
-                  double kb1 = 0;
-                  for (k1 = 0; k1 < K; k1++)
-                  {
-                     kb += Path[j][k1] * B[k1];
-                  }
-                  kb1 = kb - Path[j][k] * B[k];
-                  lograt += alpha * (log(B0 + kb1) - log(B0 + kb));
-                  kl += Path[j][k] * lambda2[j];
+                  double kb1 = kb[a] - B[k];
+                  lograt += alpha * (log(B0 + kb1) - log(B0 + kb[a]));
+                  kl += lambda2[j];
                }
             }
-            lograt += (betab + kl - betas) * B[k] + (alphas - alphab) * log(B[k]) + gsl_sf_lngamma(alphab) - gsl_sf_lngamma(alphas) + alphas * log(betas) - alphab * log(betab) + log(1 - w) - log(w);
+            lograt += (betab + kl - betas) * B[k] + (alphas - alphab) * log(B[k]) + lgab - lgas + alphas * lbs - alphab * lbb + l1w - lw;
             double uni = gsl_ran_flat(rr, 0, 1);
             if (log(uni) < lograt)
             {
                B[k] = Bknew;
                R[k] = Rknew;
                AcceptR[k] += 1;
+               changed = 1;
             }
          }
          else if (R[k] == 0)
          {
             Rknew = 1;
             Bknew = gsl_ran_gamma(rr, alphas, 1 / betas);
-            ;
             double lograt = 0;
             double kl = 0;
-            for (j = 0; j < p; j++)
+            for (a = 0; a < na; a++)
             {
-               if (Gam[j][l] == 1)
+               j = act[a];
+               if (Path[j][k])
                {
-                  double kb = 0;
-                  double kb1 = 0;
-                  for (k1 = 0; k1 < K; k1++)
-                  {
-                     kb += Path[j][k1] * B[k1];
-                  }
-                  kb1 = kb - Path[j][k] * B[k];
-                  kb = kb1 + Path[j][k] * Bknew;
-                  lograt += alpha * (log(B0 + kb) - log(B0 + kb1));
-                  kl += Path[j][k] * lambda2[j];
+                  double kb1 = kb[a] - B[k];
+                  double kb2 = kb1 + Bknew;
+                  lograt += alpha * (log(B0 + kb2) - log(B0 + kb1));
+                  kl += lambda2[j];
                }
             }
-            lograt += (betas - betab - kl) * Bknew + (-alphas + alphab) * log(Bknew) - gsl_sf_lngamma(alphab) + gsl_sf_lngamma(alphas) - alphas * log(betas) + alphab * log(betab) - log(1 - w) + log(w);
+            lograt += (betas - betab - kl) * Bknew + (-alphas + alphab) * log(Bknew) - lgab + lgas - alphas * lbs + alphab * lbb - l1w + lw;
             double uni = gsl_ran_flat(rr, 0, 1);
             if (log(uni) < lograt)
             {
                B[k] = Bknew;
                R[k] = Rknew;
                AcceptR[k] += 1;
+               changed = 1;
             }
+         }
+         if (changed)
+         {
+            for (a = 0; a < na; a++)
+            {
+               if (Path[act[a]][k])
+                  kb[a] = groupsum(K, Path[act[a]], B);
+            }
+            changed = 0;
          }
          /* Within model move*/
 
          if (R[k] == 1)
          {
             Bknew = gsl_ran_gamma(rr, alphas, 1 / betas);
-            ;
             double lograt = 0;
             double kl = 0;
-            for (j = 0; j < p; j++)
+            for (a = 0; a < na; a++)
             {
-               if (Gam[j][l] == 1)
+               j = act[a];
+               if (Path[j][k])
                {
-                  double kb = 0;
-                  double kb1 = 0;
-                  for (k1 = 0; k1 < K; k1++)
-                  {
-                     kb += Path[j][k1] * B[k1];
-                  }
-                  kb1 = kb - Path[j][k] * B[k] + Path[j][k] * Bknew;
-                  lograt += alpha * (log(B0 + kb1) - log(B0 + kb));
-                  kl += Path[j][k] * lambda2[j];
+                  double kb1 = kb[a] - B[k] + Bknew;
+                  lograt += alpha * (log(B0 + kb1) - log(B0 + kb[a]));
+                  kl += lambda2[j];
                }
             }
             lograt += (betas - betab - kl) * (Bknew - B[k]) + (-alphas + alphab) * (log(Bknew) - log(B[k]));
@@ -624,15 +632,22 @@ void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *
             if (log(uni) < lograt)
             {
                B[k] = Bknew;
+               for (a = 0; a < na; a++)
+               {
+                  if (Path[act[a]][k])
+                     kb[a] = groupsum(K, Path[act[a]], B);
+               }
             }
          }
       } // close for k
+      free(act);
+      free(kb);
    } // End for else if (rho==0)
 } // close for the function
 
-void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **A, double **U, double **X, double *s2, _Bool **Gam)
+void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **A, double **UtU, double **UtX, double *s2, _Bool **Gam)
 {
-   int s, s1, j, i;
+   int s, s1, j;
    for (j = 0; j < p; j++)
    {
       for (s = 0; s < r; s++)
@@ -649,12 +664,7 @@ void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, doub
          {
             for (s1 = 0; s1 <= s; s1++)
             {
-               double a = 0;
-               for (i = 0; i < n; i++)
-               {
-                  a += U[i][NZ1[s]] * U[i][NZ1[s1]];
-               }
-               SigmaInv[s * nx1 + s1] = SigmaInv[s1 * nx1 + s] = a / s2[j];
+               SigmaInv[s * nx1 + s1] = SigmaInv[s1 * nx1 + s] = UtU[NZ1[s]][NZ1[s1]] / s2[j];
             }
             SigmaInv[s * nx1 + s] += 1 / (Tau[NZ1[s]][j] * s2[j]);
          }
@@ -664,11 +674,7 @@ void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, doub
          double xy[nx1];
          for (s = 0; s < nx1; s++)
          {
-            xy[s] = 0;
-            for (i = 0; i < n; i++)
-            {
-               xy[s] += U[i][NZ1[s]] * X[i][j] / s2[j];
-            }
+            xy[s] = UtX[NZ1[s]][j] / s2[j];
          }
          gsl_vector_view b = gsl_vector_view_array(xy, nx1);
          gsl_linalg_cholesky_solve(&m.matrix, &b.vector, mu);
@@ -685,9 +691,9 @@ void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, doub
    }
 }
 
-void EstimateLoad(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **A, double **U, double **X, double *s2, _Bool **Gam)
+void EstimateLoad(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **A, double **UtU, double **UtX, double *s2, _Bool **Gam)
 {
-   int s, s1, j, i;
+   int s, s1, j;
    for (j = 0; j < p; j++)
    {
       for (s = 0; s < r; s++)
@@ -704,12 +710,7 @@ void EstimateLoad(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, do
          {
             for (s1 = 0; s1 <= s; s1++)
             {
-               double a = 0;
-               for (i = 0; i < n; i++)
-               {
-                  a += U[i][NZ1[s]] * U[i][NZ1[s1]];
-               }
-               SigmaInv[s * nx1 + s1] = SigmaInv[s1 * nx1 + s] = a / s2[j];
+               SigmaInv[s * nx1 + s1] = SigmaInv[s1 * nx1 + s] = UtU[NZ1[s]][NZ1[s1]] / s2[j];
             }
             SigmaInv[s * nx1 + s] += 1 / (Tau[NZ1[s]][j] * s2[j]);
          }
@@ -727,11 +728,7 @@ void EstimateLoad(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, do
          double xy[nx1];
          for (s = 0; s < nx1; s++)
          {
-            xy[s] = 0;
-            for (i = 0; i < n; i++)
-            {
-               xy[s] += U[i][NZ1[s]] * X[i][j] / s2[j];
-            }
+            xy[s] = UtX[NZ1[s]][j] / s2[j];
          }
          gsl_vector_view b = gsl_vector_view_array(xy, nx1);
          gsl_linalg_cholesky_solve(&m.matrix, &b.vector, mu);
@@ -775,10 +772,7 @@ void proposal(int n, _Bool R[n], _Bool R1[n], float phi, gsl_rng *r)
 
 void SampleUU(gsl_rng *rr, int r, int n, int Np, int *P, double ***A, double **U, double ***X, double **s2)
 {
-   int s, s1, j, i;
-   int sumMark = 0;
-   for (i = 0; i < Np; i++)
-      sumMark += P[i];
+   int s, s1, j, i, m;
 
    double *SigmaInv = malloc(r * r * sizeof(double));
    for (s = 0; s < r; s++)
@@ -786,14 +780,11 @@ void SampleUU(gsl_rng *rr, int r, int n, int Np, int *P, double ***A, double **U
       for (s1 = 0; s1 <= s; s1++)
       {
          double a = 0;
-         for (j = 0; j < sumMark; j++)
+         for (m = 0; m < Np; m++)
          {
-            int k = 0;
-            for (i = 0; i < Np; i++)
+            for (j = 0; j < P[m]; j++)
             {
-               if ((k <= j) && (j < k + P[i]))
-                  a += A[i][s][j - k] * A[i][s1][j - k] / s2[i][j - k];
-               k += P[i];
+               a += A[m][s][j] * A[m][s1][j] / s2[m][j];
             }
          }
          SigmaInv[s * r + s1] = SigmaInv[s1 * r + s] = a;
@@ -801,10 +792,10 @@ void SampleUU(gsl_rng *rr, int r, int n, int Np, int *P, double ***A, double **U
       SigmaInv[s * r + s] += 1;
    }
 
-   gsl_matrix_view m = gsl_matrix_view_array(SigmaInv, r, r);
+   gsl_matrix_view mat = gsl_matrix_view_array(SigmaInv, r, r);
    TRY
    {
-      gsl_linalg_cholesky_decomp(&m.matrix);
+      gsl_linalg_cholesky_decomp(&mat.matrix);
    }
    CATCH
    {
@@ -812,39 +803,31 @@ void SampleUU(gsl_rng *rr, int r, int n, int Np, int *P, double ***A, double **U
       // exit(1);
    }
    ETRY;
-   int l;
+   gsl_vector *mu = gsl_vector_alloc(r);
+   gsl_vector *result = gsl_vector_alloc(r);
+   double Ax[r];
    for (i = 0; i < n; i++)
    {
-      gsl_vector *mu = gsl_vector_alloc(r);
-      double Ax[r];
       for (s = 0; s < r; s++)
       {
          Ax[s] = 0;
-         for (j = 0; j < sumMark; j++)
+         for (m = 0; m < Np; m++)
          {
-            int k = 0;
-            for (l = 0; l < Np; l++)
+            for (j = 0; j < P[m]; j++)
             {
-               if ((k <= j) && (j < k + P[l]))
-                  Ax[s] += X[l][i][j - k] * A[l][s][j - k] / s2[l][j - k]; 
-               k += P[l];
+               Ax[s] += X[m][i][j] * A[m][s][j] / s2[m][j];
             }
          }
       }
       gsl_vector_view b = gsl_vector_view_array(Ax, r);
-      // printf("Size 1 is %zu ",(&m.matrix)->size2); printf("Size 2 is %zu ",mu->size);
-      gsl_linalg_cholesky_solve(&m.matrix, &b.vector, mu);
-      gsl_vector *result = gsl_vector_alloc(r);
-      multivariate_gaussian(rr, mu, &m.matrix, result);
+      gsl_linalg_cholesky_solve(&mat.matrix, &b.vector, mu);
+      multivariate_gaussian(rr, mu, &mat.matrix, result);
       for (s = 0; s < r; s++)
       {
          U[i][s] = gsl_vector_get(result, s);
-         // if (i<20)
-         // printf("%.2lf ",U[i][s]);
       }
-      gsl_vector_free(mu);
-      gsl_vector_free(result);
    }
+   gsl_vector_free(mu);
+   gsl_vector_free(result);
    free(SigmaInv);
 }
-

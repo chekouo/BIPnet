@@ -1,8 +1,9 @@
-Simulate<-function(scenario=1,setting=NULL,overlap=NULL,seed=1){
+Simulate<-function(scenario=1,setting=NULL,overlap=NULL,seed=1,seedA=1){
 	  # scenario: We have three scenarios as decrisbed in the paper. Scenario 1 has 5 settings, and scenarios 2 and 3 have both two choices: overlap and no overlap
 	  # setting: Setiings for secnario 1 only. It's a total of 4 settings
 	  # overlap: If yes, then there are some overlap between components, otherwise, there is no overlap. This input only works wen cenario is either 2 or 3
-	  # seed: Seed to generate random numbers 
+	  # seed: Seed to generate the data (latent factors U and noise)
+	  # seedA: Seed to generate the true loadings, kept fixed so that datasets with different seeds share the same true model
 	  #
 	  if ((scenario==1) && is.null(setting)){
 		      stop("You must specify the setting for scenario 1")
@@ -38,6 +39,7 @@ Simulate<-function(scenario=1,setting=NULL,overlap=NULL,seed=1){
   a2=.5;
   b2=.3;
   #latent component
+  set.seed(seedA); # loadings (and zeroed variables) depend on seedA only
   V1a=V1b=matrix(0,p/2,r);V2a=V2b=matrix(0,q/2,r);
   for (j in 1:r){
 	    V1a[,j]=runif(p/2,a1,b1);

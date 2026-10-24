@@ -324,6 +324,15 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	int t;
 	int N = nbrsample + burninsample;
 	double intercp=0;
+	// Cross-products reused by every likelihood evaluation: U'U, U'X1[m] and ||x_j||^2
+	double **UtU = dmatrix(0, r - 1, 0, r - 1);
+	double ***UtX = malloc(Np * sizeof(double **));
+	double **xx = malloc(Np * sizeof(double *));
+	for (m = 0; m < Np; m++)
+	{
+		UtX[m] = dmatrix(0, r - 1, 0, P[m] - 1);
+		xx[m] = malloc(P[m] * sizeof(double));
+	}
 	_Bool **rhomodel = malloc(nbrsample * sizeof(_Bool *));
 	for (t = 0; t < nbrsample; t++)
 	{
@@ -331,8 +340,11 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	}
 	for (t = 0; t < N; t++)
 	{
+		crossprod(n, r, r, U, U, UtU);
 		for (m = 0; m < Np; m++)
 		{
+			crossprod(n, r, P[m], U, X1[m], UtX[m]);
+			colsumsq(n, P[m], X1[m], xx[m]);
 			
 			double sumrho = 0;
 			for (l = 0; l < r; l++)
@@ -363,7 +375,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 
 			for (j = 0; j < P[m]; j++)
 			{
-				logGausQuadForm(j, r, n, P[m], Tau[m], U, X1[m], s2[m][j], &quadForm[m][j], Gam[m][j], &loggauss[m][j]);
+				logGausQuadForm(j, r, n, Tau[m], UtU, UtX[m], xx[m][j], s2[m][j], &quadForm[m][j], Gam[m][j], &loggauss[m][j]);
 				if (t == 0)
 				{
 					loggauss[m][j] = -DBL_MAX;
@@ -372,11 +384,11 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 
 			if (IndVar[m] != 2)
 			{
-				SamplerhoGamma(rr, r, n, IndVar[m], P[m], rhoest[m], Tau[m], U, X1[m], qv[m], q[m], s2[m], quadForm[m], Gam[m], loggauss[m]);
+				SamplerhoGamma(rr, r, n, IndVar[m], P[m], rhoest[m], Tau[m], UtU, UtX[m], xx[m], qv[m], q[m], s2[m], quadForm[m], Gam[m], loggauss[m]);
 			}
 
 			sigma2(rr, P[m], n, a0, b0, quadForm[m], s2[m]);
-			LoadAOther(rr, r, n, P[m], rhoest[m], Tau[m], A[m], U, X1[m], s2[m], Gam[m]);
+			LoadAOther(rr, r, n, P[m], rhoest[m], Tau[m], A[m], UtU, UtX[m], s2[m], Gam[m]);
 
 			for (l = 0; l < r; l++)
 			{
@@ -530,23 +542,28 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	_Bool **UniqModel = UniqueModel(nbrsample, dim, rhomodel, modelidx, &countmodel);
 	free_bmatrix(rhomodel, 0, nbrsample - 1, 0, dim - 1);
 	double *logpo = malloc(countmodel * sizeof(double));
+	crossprod(n, r, r, meanU, meanU, UtU);
+	for (m = 0; m < Np; m++)
+	{
+		if (IndVar[m] == 1)
+		{
+			for (i = 0; i < n; i++)
+			{
+				for (j = 0; j < P[m]; j++)
+				{
+					X1[m][i][j] = X[m][i][j] - *InterceptMean;
+				}
+			}
+		}
+		crossprod(n, r, P[m], meanU, X1[m], UtX[m]);
+		colsumsq(n, P[m], X1[m], xx[m]);
+	}
 	for (t = 0; t < countmodel; t++)
 	{
 		int rm = 0;
 		//int sumg = 0;
 		for (m = 0; m < Np; m++)
 		{
-
-			if (IndVar[m] == 1)
-			{
-				for (i = 0; i < n; i++)
-				{
-					for (j = 0; j < P[m]; j++)
-					{
-						X1[m][i][j] = X[m][i][j] - *InterceptMean;
-					}
-				}
-			}
 			for (j = 0; j < P[m]; j++)
 			{
 				for (l = 0; l < r; l++)
@@ -576,7 +593,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			}
 		}
 
-		logPostGam(&logpo[t], IndVar, Np, r, n, P, Tau, meanU, X1, s2Mean, rhoest, Gam, qv, q);
+		logPostGam(&logpo[t], IndVar, Np, r, n, P, Tau, UtU, UtX, xx, s2Mean, rhoest, Gam, qv, q);
 	}
 	int *highmodelidx = malloc(countmodel * sizeof(int));
 	sort(countmodel, logpo, highmodelidx);
@@ -630,7 +647,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		}
 		for (m = 0; m < Np; m++)
 		{
-			EstimateLoad(rr, r, n, P[m], rhoest[m], Taumean[m], A[m], meanU, X1[m], s2Mean[m], Gam[m]);
+			EstimateLoad(rr, r, n, P[m], rhoest[m], Taumean[m], A[m], UtU, UtX[m], s2Mean[m], Gam[m]);
 			for (l = 0; l < r; l++)
 			{
 				for (j = 0; j < P[m]; j++)
@@ -672,7 +689,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				}
 			}
 		}
-		EstimateLoad(rr, r, n, P[m], rhoest[m], Taumean[m], A[m], meanU, X[m], s2Mean[m], Gam[m]);
+		crossprod(n, r, P[m], meanU, X[m], UtX[m]);
+		EstimateLoad(rr, r, n, P[m], rhoest[m], Taumean[m], A[m], UtU, UtX[m], s2Mean[m], Gam[m]);
 
 		for (l = 0; l < r; l++)
 		{
@@ -721,7 +739,12 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		free(AcceptB0[m]);
 		free(qv[m]);
 		free(wg[m]);
+		free_dmatrix(UtX[m], 0, r - 1, 0, P[m] - 1);
+		free(xx[m]);
 	}
+	free_dmatrix(UtU, 0, r - 1, 0, r - 1);
+	free(UtX);
+	free(xx);
 	free(Gam);
 	free(Gamvs); // free(GamvsK);
 	free(Tau);
