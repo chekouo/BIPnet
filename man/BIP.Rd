@@ -11,7 +11,7 @@ The method can incorporate clinical covariates, clinical response variables and 
 \usage{
 BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4, 
     sample=5000, burnin=1000,nbrmaxmodels=50,priorcompselv=c(1,1),priorcompselo=c(1,1),
-    priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=rep(0.05,length(dataList)),chainNbr=1)
+    priorb0=c(1,100),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=rep(0.05,length(dataList)),chainNbr=1)
 }
 
 \arguments{
@@ -23,14 +23,14 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 	}
 	\item{Method}{ Method is either BIPnet (with network information) or BIP (withouth network information)}
 	\item{nbrcomp}{ Number of components of the shared components}
-	\item{sample }{ Total number of MCMC draws. It must be larger than burnin. }
+	\item{sample }{ Number of MCMC draws kept after burn-in; the posterior summaries are computed from these draws. The sampler runs sample + burnin iterations in total. It must be larger than both burnin and 20. }
 	\item{burnin }{ 
-		Number of draws to discard for burn-in
+		Number of initial draws discarded as burn-in, run before the sample draws that are kept.
 	}
 	\item{nbrmaxmodels}{ Number maximum of models for prediction}
 	\item{priorcompselv}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting components}
 \item{priorcompselo}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting a component associated with the response.}
-\item{priorb0}{ Hyperparameters of a gamma distribution; prior distribution of the paramater \eqn{b_{l0}} that controls the shrinkage of loadings when there is no grouping information }
+\item{priorb0}{ Hyperparameters of a gamma distribution; prior distribution of the paramater \eqn{b_{l0}} that controls the shrinkage of loadings when there is no grouping information. The two values are the shape and the rate. The default c(1,100), with prior mean 0.01, keeps \eqn{b_{l0}} small relative to the group effects, so that the grouping information drives the shrinkage. }
 \item{priorb}{ Hyperparameters of a gamma distribution; prior distribution of group effect coefficients \eqn{b_{lj}}, \eqn{j=1,...,K_l}.} 
 \item{priorgrpsel}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting groups.}
 \item{probvarsel}{ Prior probability for variable selection for each data type. It's a vector of size the number of data types. Please note that when a data type m is not subject of variable selection (e.g., covariate variables or outcome), then probvarsel[m]=1.}
@@ -46,6 +46,8 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 \item{CompoSelMean}{ MPPs of the selection of components \eqn{l}.}
 \item{GrpSelMean}{ MPPs of the selection of groups if BIPnet is chosen.}
 \item{GrpEffectMean}{ Posterior mean of the group effects}
+\item{IntGrpMean}{ Posterior mean of \eqn{b_{l0}}, an \eqn{(M+1) \times r} matrix (one row per data type, one column per component).}
+\item{AcceptB0Rate}{ Metropolis-Hastings acceptance rate of \eqn{b_{l0}} after burn-in, same layout as IntGrpMean. It is NA for a component that was never selected after burn-in, since \eqn{b_{l0}} is then drawn from its prior.}
 \item{....}{ The other parameters are used for prediction}
 }
 

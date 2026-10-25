@@ -2,22 +2,6 @@
 #include <gsl/gsl_matrix.h>
 #define MAX(a, b) ((a) > (b) ? a : b)
 #define MIN(a, b) ((a) > (b) ? b : a)
-#include <setjmp.h>
-#define TRY                    \
-    do                         \
-    {                          \
-        jmp_buf ex_buf__;      \
-        if (!setjmp(ex_buf__)) \
-        {
-#define CATCH \
-    }         \
-    else      \
-    {
-#define ETRY \
-    }        \
-    }        \
-    while (0)
-#define THROW longjmp(ex_buf__, 1)
 
 //********//
 void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *datasets, int *IndVar, int *K, int *Paths,
@@ -25,8 +9,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
                   double *VarSelMeanGlobal, double *GrpSelMean, double *GrpEffectMean, double *IntGrpMean,
                   double *EstU, double *EstSig2, double *InterceptMean, double *EstLoadMod, double *EstLoad,
                   int *nbrmodel1, double *postgam, double *priorcompsel, double *priorcompselo, double *priorb0,
-                  double *priorb, double *priorgrpsel, double *probvarsel, int *chainNbr);
-void SampleUU(gsl_rng *rr, int r, int n, int Np, int *P, double ***A, double **U, double ***X, double **s2);
+                  double *priorb, double *priorgrpsel, double *probvarsel, int *chainNbr, double *AcceptB0Rate);
+void SampleUU(gsl_rng *rr, int r, int n, int Np, int *P, double ***A, _Bool ***Gam, double **U, double ***X, double **s2);
 double mean(int n, double *x);
 void crossprod(int n, int r, int p, double **U, double **X, double **UtX);
 void colsumsq(int n, int p, double **X, double *xx);
@@ -36,7 +20,7 @@ void logPostGam(double *logpo, int *IndVar, int Np, int r, int n, int *P, double
 _Bool **UniqueModel(int nbrsample, int p, _Bool **rhosample, int *modelidx, int *countd1);
 void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, double **Tau, double **UtU, double **UtX, double *xx, double *q1, double q2, double *s2, double *quadForm, _Bool **Gam, double *loggauss);
 void logGausQuadForm(int j, int r, int n, double **Tau, double **UtU, double **UtX, double xx, double s2, double *quadForm, _Bool *Gam, double *loggauss);
-void EffectZero(int l, gsl_rng *rr, int K, int p, _Bool rho, _Bool *R, double *B, double *B0, _Bool **Path, double alphab0, double betab0, double alpha, double *lambda2, double *AcceptB0, _Bool **Gam);
+void EffectZero(int l, gsl_rng *rr, int K, int p, _Bool rho, _Bool *R, double *B, double *B0, _Bool **Path, double alphab0, double betab0, double alpha, double *lambda2, double *AcceptB0, _Bool **Gam, double sdB0);
 void TauLambda(int l, gsl_rng *rr, int K, int p, double *A, double *B, double B0, double *Tau, _Bool **Path, double alpha, double *lambda2, double *s2, _Bool **Gam);
 void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *A, double *B, double B0, double *Tau, _Bool **Path, double alphab, double betab, double w, double alpha, double *lambda2, double *s2, double *AcceptR, _Bool **Gam);
 void sigma2(gsl_rng *rr, int p, int n, double a0, double b0, double *quadForm, double *s2);
@@ -69,3 +53,4 @@ void nrerror(char error_text[]);
 double **dmatrix(int nrl, int nrh, int ncl, int nch);
 _Bool **bmatrix(int nrl, int nrh, int ncl, int nch);
 void free_bmatrix(_Bool **m, int nrl, int nrh, int ncl, int nch);
+int safe_cholesky(double *M, int d, const char *where);

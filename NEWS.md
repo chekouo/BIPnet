@@ -39,14 +39,15 @@ Changes made on 2026-10-24.
 ## Performance (no change in results)
 
 The `BIPpredict()` example (n = 200, two platforms of 500 markers plus the response,
-r = 4, K = 11 groups, 5000 + 1000 MCMC iterations) now runs in about 14 s instead of
-111 s, roughly 8x faster.
+r = 4, K = 11 groups, 5000 + 1000 MCMC iterations) now runs in about 10 s instead of
+111 s, roughly 11x faster.
 
 | Version                                      | MCMC time |
 |----------------------------------------------|-----------|
 | Bug fixes only                               | 111 s     |
 | + precomputed `U'U`, `U'X`                   | 26 s      |
 | + cached group sums, restructured `SampleUU` | 14 s      |
+| + `SampleUU` skips zero loadings (via `Gam`) | 10 s      |
 
 * **Precomputed cross-products for the likelihood** (`src/myfunction.c`, `src/BIP.c`,
   `src/utils.c`, `src/header.h`).
@@ -84,6 +85,15 @@ r = 4, K = 11 groups, 5000 + 1000 MCMC iterations) now runs in about 14 s instea
   - The loops over markers no longer scan all `Np` platforms to find which one each marker
     belongs to.
   - The GSL work vectors are allocated once instead of for each sample.
+  - Zero loadings are skipped using the selection indicators. `SampleUU` now also receives
+    `Gam`; after `LoadAOther()`, `A[m][s][j]` is zero exactly when `Gam[m][j][s] == 0`.
+    For each platform and component, a list of markers with `Gam[m][j][s] == 1` is built
+    once per call. `Ax[s]` sums only over that list, and each `SigmaInv[s][s1]` term is
+    added only when both `Gam[m][j][s]` and `Gam[m][j][s1]` are 1. The skipped terms were
+    exactly zero, and the remaining terms are added in the original order. `SampleUU` is
+    about 6x faster on the example (about 25% of markers active) and about 11x faster on a
+    sparser problem (n = 300, 2 x 2000 markers).
+  - New signature: `SampleUU(rr, r, n, Np, P, A, Gam, U, X, s2)`.
   - Results are bit-identical.
 
 ## Verification

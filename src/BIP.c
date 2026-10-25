@@ -14,6 +14,7 @@
 #include <gsl/gsl_statistics.h>
 #include <gsl/gsl_math.h>
 #include <time.h>
+#include <gsl/gsl_errno.h>
 #include "header.h"
 // R CMD SHLIB MainAlGo.c  utils.c myfunction.c -lgsl -lgslcblas -o BayesianFA.so
 // void mainfunction(const char *Method,int * n1,int *P,int *r1,double *dataset1, double *dataset2, double *outcome,int *K,int *path0, int *path1,int *nbrsample1,int *burninsample1,double *CompoSelMean,double *VarSelMean,double * VarSelMeanGlobal,double * GrpSelMean,double *GrpEffectMean,double * IntGrpMean){
@@ -23,9 +24,13 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				  double *VarSelMeanGlobal, double *GrpSelMean, double *GrpEffectMean, double *IntGrpMean,
 				  double *EstU, double *EstSig2, double *InterceptMean, double *EstLoadMod, double *EstLoad,
 				  int *nbrmodel1, double *postgam, double *priorcompsel, double *priorcompselo,
-				  double *priorb0, double *priorb, double *priorgrpsel, double *probvarsel, int *chainNbr)
+				  double *priorb0, double *priorb, double *priorgrpsel, double *probvarsel, int *chainNbr,
+				  double *AcceptB0Rate)
 {
 
+	/* GSL errors (e.g. a matrix that is not positive definite) are returned as status codes and
+	 * handled by the callers, instead of calling abort() and killing the R session */
+	gsl_error_handler_t *old_handler = gsl_set_error_handler_off();
 	long seed = chainNbr[0];
 	gsl_rng *rr = gsl_rng_alloc(gsl_rng_rand48);
 	gsl_rng_set(rr, seed);
@@ -46,6 +51,13 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	printf("Number of MCMC samples after burn-in is %d\n", nbrsample);
 	int burninsample = burninsample1[0];
 	printf("Number of burn-in is %d\n", burninsample);
+	if ((nbrsample < 1) || (burninsample < 0))
+	{ // the posterior means, UniqueModel and the model averaging need at least one sample after burn-in
+		printf("Error: the number of MCMC samples after burn-in must be at least 1 and burn-in cannot be negative.\n");
+		gsl_rng_free(rr);
+		gsl_set_error_handler(old_handler);
+		return;
+	}
 	int n = n1[0];
 	printf("Number of samples is %d\n", n);
 	// int p0=P[0];
@@ -187,6 +199,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	double **B0 = malloc(Np * sizeof(double *));
 	double **B0mean = malloc(Np * sizeof(double *));
 	double **AcceptB0 = malloc(Np * sizeof(double *));
+	double **TryB0 = malloc(Np * sizeof(double *)); // number of MH attempts for B0 after burn-in
+	double **sdB0 = malloc(Np * sizeof(double *));  // step size of the log(B0) random walk, tuned during burn-in
 	double **quadForm = malloc(Np * sizeof(double *));
 	double **loggauss = malloc(Np * sizeof(double *));
 	double **s2 = malloc(Np * sizeof(double *));
@@ -209,6 +223,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		B0[m] = malloc(r * sizeof(double));
 		B0mean[m] = malloc(r * sizeof(double));
 		AcceptB0[m] = malloc(r * sizeof(double));
+		TryB0[m] = malloc(r * sizeof(double));
+		sdB0[m] = malloc(r * sizeof(double));
 		Tau[m] = dmatrix(0, r - 1, 0, P[m] - 1);
 		Taumean[m] = dmatrix(0, r - 1, 0, P[m] - 1);
 		for (l = 0; l < r; l++)
@@ -217,6 +233,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			B0mean[m][l] = 0;
 			B0[m][l] = 0.1;
 			AcceptB0[m][l] = 0;
+			TryB0[m][l] = 0;
+			sdB0[m][l] = 1;
 			for (j = 0; j < P[m]; j++)
 				Gammean[m][j][l] = 0;
 			double uni = gsl_ran_flat(rr, 0, 1);
@@ -340,6 +358,12 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	}
 	for (t = 0; t < N; t++)
 	{
+		if (t == burninsample)
+		{ // B0 acceptance rate is computed after burn-in only
+			for (m = 0; m < Np; m++)
+				for (l = 0; l < r; l++)
+					AcceptB0[m][l] = 0;
+		}
 		crossprod(n, r, r, U, U, UtU);
 		for (m = 0; m < Np; m++)
 		{
@@ -404,7 +428,15 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 					wg[m][l] = gsl_ran_beta(rr, alg + rhoest[m][l] * sumrho, blg + rhoest[m][l] * (K[m] - sumrho));
 					GroupEffect(l, rr, rhoest[m][l], K[m], P[m], R[m][l], A[m][l], B[m][l], B0[m][l], Tau[m][l], Path[m], alphab, betab, wg[m][l], alpha, lambda2[m][l], s2[m], AcceptR[m][l], Gam[m]);
 				}
-				EffectZero(l, rr, K[m], P[m], rhoest[m][l], R[m][l], B[m][l], &B0[m][l], Path[m], alphab0, betab0, alpha, lambda2[m][l], &AcceptB0[m][l], Gam[m]);
+				if ((t >= burninsample) && (rhoest[m][l] == 1))
+					TryB0[m][l] += 1; // EffectZero makes an MH move only when rho == 1
+				double acc0 = AcceptB0[m][l];
+				EffectZero(l, rr, K[m], P[m], rhoest[m][l], R[m][l], B[m][l], &B0[m][l], Path[m], alphab0, betab0, alpha, lambda2[m][l], &AcceptB0[m][l], Gam[m], sdB0[m][l]);
+				if ((t < burninsample) && (rhoest[m][l] == 1))
+				{ // Robbins-Monro tuning towards an acceptance rate of 0.44; the step size is fixed after burn-in
+					sdB0[m][l] *= exp((AcceptB0[m][l] - acc0 - 0.44) / sqrt(t + 1.0));
+					sdB0[m][l] = MIN(MAX(sdB0[m][l], 0.01), 10);
+				}
 			}
 			if (IndVar[m] == 1)
 			{
@@ -418,7 +450,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				}
 			}
 		}
-		SampleUU(rr, r, n, Np, P, A, U, X1, s2);
+		SampleUU(rr, r, n, Np, P, A, Gam, U, X1, s2);
 
 		if (t >= burninsample)
 		{
@@ -521,6 +553,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		for (l = 0; l < r; l++)
 		{
 			IntGrpMean[m * r + l] = B0mean[m][l];
+			AcceptB0Rate[m * r + l] = (TryB0[m][l] > 0) ? AcceptB0[m][l] / TryB0[m][l] : -1; // -1: never active
 		}
 		sumP += P[m];
 		sumK += K[m];
@@ -689,7 +722,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				}
 			}
 		}
-		crossprod(n, r, P[m], meanU, X[m], UtX[m]);
+		// X1: the response centred by InterceptMean, as for EstLoadMod; X1[m] == X[m] for the other data types
+		crossprod(n, r, P[m], meanU, X1[m], UtX[m]);
 		EstimateLoad(rr, r, n, P[m], rhoest[m], Taumean[m], A[m], UtU, UtX[m], s2Mean[m], Gam[m]);
 
 		for (l = 0; l < r; l++)
@@ -737,6 +771,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		free(quadForm[m]);
 		free(loggauss[m]);
 		free(AcceptB0[m]);
+		free(TryB0[m]);
+		free(sdB0[m]);
 		free(qv[m]);
 		free(wg[m]);
 		free_dmatrix(UtX[m], 0, r - 1, 0, P[m] - 1);
@@ -768,6 +804,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	free(lambda2);
 	gsl_rng_free(rr);
 	free(AcceptB0);
+	free(TryB0);
+	free(sdB0);
 	free(Path);
 	free(AcceptR);
 	free(Rmean);
@@ -777,5 +815,6 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	double time_taken = ((double)t1) / CLOCKS_PER_SEC; // in seconds
 	printf("\n\nTime taken in seconds is %f\n", time_taken);
 	printf("\nTime taken in minutes is %f\n", time_taken / 60);
+	gsl_set_error_handler(old_handler);
 	
 }

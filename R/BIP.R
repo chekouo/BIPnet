@@ -2,13 +2,13 @@ library(MASS)
 #dyn.load("~/projects/def-chekouo/chekouo/BayesianFA/CallfromR/BayesianFA.so")
 
 BIP <- function(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4, sample=5000, burnin=1000,nbrmaxmodels=50,
-		  priorcompselv=c(1,1),priorcompselo=c(1,1),priorb0=c(2,2),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=rep(0.05,length(dataList)),chainNbr=1) {
+		  priorcompselv=c(1,1),priorcompselo=c(1,1),priorb0=c(1,100),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=rep(0.05,length(dataList)),chainNbr=1) {
        
 if (sample<=burnin){
-stop("Argument burnin must be smaller than sample: the number of MCMC iterations.")
+stop("Argument burnin must be smaller than sample: the number of MCMC draws kept after burn-in.")
 }
 if (sample<=20){
-stop("Please specify a larger number of MCMC iterations")
+stop("Please specify a larger number of MCMC draws kept after burn-in (sample > 20)")
 }
 
 if (is.null(nbrcomp)){
@@ -75,7 +75,8 @@ result <- .C("mainfunction",
 	       EstLoadMod=as.double(rep(0,nbrmaxmodels*nbrcomp*sum(P))),EstLoad=as.double(rep(0,nbrcomp*sum(P))),
 	       nbrmodel1=as.integer(0),postgam=rep(0,nbrmaxmodels),priorcompsel=priorcompselv,
 	       priorcompselo=priorcompselo,priorb0=priorb0,priorb=as.double(priorb),priorgrpsel=priorgrpsel,
-		probvarsel=as.double(probvarsel),chainNbr=as.integer(chainNbr));
+		probvarsel=as.double(probvarsel),chainNbr=as.integer(chainNbr),
+		AcceptB0Rate=as.double(rep(0,Np*nbrcomp)));
 
 
 
@@ -100,6 +101,7 @@ resvarsel5=result$EstLoad;
 EstimateU=matrix(result$EstU,n,byrow=T);
 CompoSelMean=matrix(result$CompoSelMean,Np,byrow=T);
 IntGrpMean=matrix(result$IntGrpMean,Np,byrow=T);
+AcceptB0Rate=matrix(result$AcceptB0Rate,Np,byrow=T); AcceptB0Rate[AcceptB0Rate<0]=NA; # NA: component never active after burn-in
 VarSelMeanGlobal=list();
 VarSelMean=list();
 GrpSelMean=list();
@@ -120,6 +122,6 @@ m3=m3+K[m]*nbrcomp;
 
 }
 
-return (list(EstU=EstimateU,VarSelMean=VarSelMean,VarSelMeanGlobal=VarSelMeanGlobal,CompoSelMean=CompoSelMean,GrpSelMean=GrpSelMean,GrpEffectMean=GrpEffectMean,IntGrpMean=IntGrpMean,EstLoad=EstLoad,EstLoadModel=EstLoadModel,nbrmodel=result$nbrmodel1,EstSig2=EstSig2,EstIntcp=result$InterceptMean,PostGam=result$postgam,IndicVar=IndicVar,nbrcomp=nbrcomp,MeanData=MeanData,SDData=SD))
+return (list(EstU=EstimateU,VarSelMean=VarSelMean,VarSelMeanGlobal=VarSelMeanGlobal,CompoSelMean=CompoSelMean,GrpSelMean=GrpSelMean,GrpEffectMean=GrpEffectMean,IntGrpMean=IntGrpMean,AcceptB0Rate=AcceptB0Rate,EstLoad=EstLoad,EstLoadModel=EstLoadModel,nbrmodel=result$nbrmodel1,EstSig2=EstSig2,EstIntcp=result$InterceptMean,PostGam=result$postgam,IndicVar=IndicVar,nbrcomp=nbrcomp,MeanData=MeanData,SDData=SD))
 }
 

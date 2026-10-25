@@ -15,6 +15,7 @@
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics.h>
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_errno.h>
 #include "header.h"
 
 double mean(int n, double *x)
@@ -236,7 +237,10 @@ double inverseGaussian(gsl_rng *r, double mu, double lambda)
 {
   double v = gsl_ran_gaussian(r, 1); // sample from a normal distribution with a mean of 0 and 1 standard deviation
   double y = v * v;
-  double x = mu + (mu * mu * y) / (2 * lambda) - (mu / (2 * lambda)) * sqrt(4 * mu * lambda * y + mu * mu * y * y);
+  /* x = mu + mu^2 y/(2 lambda) - (mu/(2 lambda)) sqrt(4 mu lambda y + mu^2 y^2), written as
+   * mu^2 / (mu + mu^2 y/(2 lambda) + ...) to avoid cancellation when mu is large */
+  double b = (mu / (2 * lambda)) * sqrt(4 * mu * lambda * y + mu * mu * y * y);
+  double x = mu * mu / (mu + (mu * mu * y) / (2 * lambda) + b);
   double test = gsl_ran_flat(r, 0, 1); // sample from a uniform distribution between 0 and 1
   if (test <= (mu) / (mu + x))
     return x;
@@ -420,4 +424,59 @@ void free_bmatrix(_Bool **m, int nrl, int nrh, int ncl, int nch)
     free((_Bool *)(m[i] + ncl));
 
   free((_Bool *)(m + nrl));
+}
+
+/* In-place Cholesky factorisation of the d x d symmetric matrix M (row-major) that never aborts
+ * (mainfunction switches the GSL error handler off). If M is not numerically positive definite,
+ * a ridge of 1e-10, 1e-8, 1e-6 and then 1e-4 times its mean diagonal is added and the
+ * factorisation retried. When the first attempt succeeds, the result is exactly that of
+ * gsl_linalg_cholesky_decomp. Returns GSL_SUCCESS, or GSL_EDOM when M has non-finite entries or
+ * stays indefinite; a warning naming `where` is printed (the first 10 times only). */
+int safe_cholesky(double *M, int d, const char *where)
+{
+  static int nwarn = 0;
+  double M0[d * d];
+  int i, k, status, nonfinite = 0;
+  double meandiag = 0;
+  for (i = 0; i < d * d; i++)
+  {
+    if (!isfinite(M[i]))
+    {
+      nonfinite = 1;
+      goto fail;
+    }
+    M0[i] = M[i];
+  }
+  gsl_matrix_view mv = gsl_matrix_view_array(M, d, d);
+  status = gsl_linalg_cholesky_decomp(&mv.matrix);
+  if (status == GSL_SUCCESS)
+    return GSL_SUCCESS;
+  for (i = 0; i < d; i++)
+    meandiag += fabs(M0[i * d + i]) / d;
+  if (meandiag == 0)
+    meandiag = 1;
+  double ridge[4] = {1e-10, 1e-8, 1e-6, 1e-4};
+  for (k = 0; k < 4; k++)
+  {
+    for (i = 0; i < d * d; i++)
+      M[i] = M0[i];
+    for (i = 0; i < d; i++)
+      M[i * d + i] += ridge[k] * meandiag;
+    status = gsl_linalg_cholesky_decomp(&mv.matrix);
+    if (status == GSL_SUCCESS)
+    {
+      if (nwarn < 10)
+        printf("\nWarning (%s): matrix not positive definite, a ridge of %g x mean diagonal was added.\n", where, ridge[k]);
+      nwarn++;
+      return GSL_SUCCESS;
+    }
+  }
+fail:
+  if (nwarn < 10)
+    printf("\nWarning (%s): Cholesky factorisation failed (%s); this update is skipped.\n", where,
+           nonfinite ? "non-finite entries" : "not positive definite even after adding a ridge");
+  if (nwarn == 9)
+    printf("Further warnings of this kind are not printed.\n");
+  nwarn++;
+  return GSL_EDOM;
 }
