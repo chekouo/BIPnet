@@ -11,7 +11,7 @@ The method can incorporate clinical covariates, clinical response variables and 
 \usage{
 BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4, 
     sample=5000, burnin=1000,nbrmaxmodels=50,priorcompselv=c(1,1),priorcompselo=c(1,1),
-    priorb0=c(1,100),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=rep(0.05,length(dataList)),chainNbr=1)
+    priorb0=c(1,100),priorb=c(1,1),priorgrpsel=c(1,1),probvarsel=rep(0.05,length(dataList)),chainNbr=1,relabel=FALSE)
 }
 
 \arguments{
@@ -35,6 +35,7 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 \item{priorgrpsel}{ Hyperparameters of a beta(a,b) distribution, prior distribution of the probability of selecting groups.}
 \item{probvarsel}{ Prior probability for variable selection for each data type. It's a vector of size the number of data types. Please note that when a data type m is not subject of variable selection (e.g., covariate variables or outcome), then probvarsel[m]=1.}
 \item{chainNbr}{ MCMC chain number. The default is 1 for one MCMC number 1. If you want to run N multiple MCMC chains, make a loop in R as for ( i in 1:N)  BIP(...,chainNbr=i)}
+\item{relabel}{ If TRUE, the components are relabelled after burn-in to correct for label switching, so that the component-level summaries (CompoSelMean, VarSelMean, GrpSelMean, GrpEffectMean, IntGrpMean, AcceptB0Rate and EstU) refer to the same component in every draw. Each draw is matched to the running mean of the aligned draws of \eqn{U} by the signed permutation of its components that maximises the absolute correlations (Hungarian algorithm); the signs are applied to \eqn{U}. The sampler itself is not changed, and the models used for prediction are stored in the aligned labels. The default FALSE keeps the labels of the sampler. Components of different chains are not aligned with each other.}
 }
 \details{
 	The function will return several R objects, which can be assigned to a variable. To see the results, use the ``$" operator. 
@@ -47,6 +48,7 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 \item{GrpSelMean}{ MPPs of the selection of groups if BIPnet is chosen.}
 \item{GrpEffectMean}{ Posterior mean of the group effects}
 \item{IntGrpMean}{ Posterior mean of \eqn{b_{l0}}, an \eqn{(M+1) \times r} matrix (one row per data type, one column per component).}
+\item{RelabelInfo}{ Label switching after burn-in, computed whether or not relabel is TRUE: relabel (whether the summaries were relabelled), labelSwaps (number of draws where the matching of the components changed from the previous draw), signFlips (draws where only a sign changed) and pctRelabelled (percentage of draws whose matching is not the identity).}
 \item{AcceptB0Rate}{ Metropolis-Hastings acceptance rate of \eqn{b_{l0}} after burn-in, same layout as IntGrpMean. It is NA for a component that was never selected after burn-in, since \eqn{b_{l0}} is then drawn from its prior.}
 \item{....}{ The other parameters are used for prediction}
 }
