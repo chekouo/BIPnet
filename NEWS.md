@@ -2,6 +2,35 @@
 
 Changes made on 2026-10-24.
 
+## New features
+
+* **Option to correct for label switching: `BIP(..., relabel = FALSE)`** (`R/BIP.R`,
+  `src/BIP.c`, `src/utils.c`).
+  - The components of the factor model are identified only up to their order and signs, so
+    the component-level summaries can mix components if the labels change during the MCMC.
+  - With `relabel = TRUE`, after burn-in every draw is matched to the running mean of the
+    aligned draws of `U`. The match is the signed permutation of the components that
+    maximises the absolute correlations, found with the Hungarian algorithm (new functions
+    `max_assignment()` and `align_components()` in `src/utils.c`).
+  - The summaries are then computed in the aligned labels: `EstU` (with the signs applied),
+    `CompoSelMean`, `VarSelMean`, `GrpSelMean`, `GrpEffectMean`, `IntGrpMean` and
+    `AcceptB0Rate`. The models kept for Bayesian model averaging are stored in the same
+    labels, so `EstLoad`, `EstLoadModel`, `PostGam` and `BIPpredict()` stay consistent with
+    `EstU`. The sampler itself is unchanged.
+  - New output `RelabelInfo`: the number of label swaps and sign flips after burn-in and the
+    percentage of relabelled draws. It is computed whatever the value of `relabel`, so it
+    shows whether relabelling would change the results.
+  - The default `relabel = FALSE` gives the same results as before. Chains run with
+    different `chainNbr` are not aligned with each other.
+  - Verification: the assignment was optimal in 4000 of 4000 random cases checked against
+    brute force (r = 1 to 8, with ties). In a test build that applied random signed
+    permutations to the whole sampler state every 500 iterations, `relabel = TRUE` recovered
+    the results of the unpermuted chain (mean absolute difference in `CompoSelMean` 0.004,
+    against 0.150 without relabelling), and `EstU` matched it column by column
+    (correlation 1.00).
+  - In the simulation scenarios of `Simulate()`, no label switching occurred after burn-in,
+    so `relabel = TRUE` and `relabel = FALSE` gave identical results there.
+
 ## Bug fixes (these change results)
 
 * **Wrong model-vector length (`dim`) in `mainfunction`** (`src/BIP.c`).

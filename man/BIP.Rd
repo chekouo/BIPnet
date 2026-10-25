@@ -49,6 +49,8 @@ BIP(dataList=dataList,IndicVar=IndicVar, groupList=NULL,Method=Method,nbrcomp=4,
 \item{GrpEffectMean}{ Posterior mean of the group effects}
 \item{IntGrpMean}{ Posterior mean of \eqn{b_{l0}}, an \eqn{(M+1) \times r} matrix (one row per data type, one column per component).}
 \item{RelabelInfo}{ Label switching after burn-in, computed whether or not relabel is TRUE: relabel (whether the summaries were relabelled), labelSwaps (number of draws where the matching of the components changed from the previous draw), signFlips (draws where only a sign changed) and pctRelabelled (percentage of draws whose matching is not the identity).}
+\item{Y}{ The response used to fit the model, as given in dataList (it is not standardised); used by \code{\link{plotComponents}} to colour the samples.}
+\item{FeatureNames}{ List with the column names of each data set in dataList (NULL for a data set without column names), used to label the plots of \code{\link{plotVarSel}} and \code{\link{plotVarSelGlobal}}.}
 \item{AcceptB0Rate}{ Metropolis-Hastings acceptance rate of \eqn{b_{l0}} after burn-in, same layout as IntGrpMean. It is NA for a component that was never selected after burn-in, since \eqn{b_{l0}} is then drawn from its prior.}
 \item{....}{ The other parameters are used for prediction}
 }

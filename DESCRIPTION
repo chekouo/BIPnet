@@ -8,6 +8,6 @@ Maintainer: Thierry Chekouo <tchekouo@umn.edu>
 Description: The BIPnet package implements an MCMC algorithm for a Bayesian analysis that integrates multi-omics data types, clinical covariates and clinical response variables. 
 SystemRequirements: GSL (GNU Scientific Library)
 License: GPL (>= 2.0)
-Imports: AUC, MASS, Matrix
+Imports: AUC, MASS, Matrix, graphics, grDevices
 RoxygenNote: 6.1.0
 Encoding: UTF-8
