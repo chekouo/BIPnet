@@ -120,57 +120,6 @@ void logGausQuadForm(int j, int r, int n, double **Tau, double **UtU, double **U
 }
 
 
-double logpost(int r, int n, int p, _Bool *rho, double **Tau, double **UtU, double **UtX, double *xx, double q, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
-{
-   double logpostrho = 0;
-   int l, j;
-   for (j = 0; j < p; j++)
-   {
-      logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quadForm[j], Gam[j], &loggauss[j]);
-      logpostrho += loggauss[j];
-   }
-   for (l = 0; l < r; l++)
-   {
-      logpostrho += rho[l] * log(q) + (1 - rho[l]) * log(1 - q);
-   }
-   return logpostrho;
-}
-
-void rho1(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **UtU, double **UtX, double *xx, double q, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
-{
-   int l, j;
-   double logpostold = 0;
-   double logprior = 0;
-   for (l = 0; l < r; l++)
-   {
-      logprior += rho[l] * log(q) + (1 - rho[l]) * log(1 - q);
-   }
-   for (j = 0; j < p; j++)
-   {
-      logpostold += loggauss[j];
-   }
-   logpostold += logprior;
-   double *quadForm1 = malloc(p * sizeof(double));
-   double *loggauss1 = malloc(p * sizeof(double));
-   double phi = 0.5;
-   _Bool rhonew[r];
-   proposal(r, rho, rhonew, phi, rr);
-   double logpostnew = logpost(r, n, p, rhonew, Tau, UtU, UtX, xx, q, s2, quadForm1, Gam, loggauss1);
-   double u = gsl_ran_flat(rr, 0, 1);
-   if (log(u) < logpostnew - logpostold)
-   {
-      for (l = 0; l < r; l++)
-      {
-         rho[l] = rhonew[l];
-      }
-      for (j = 0; j < p; j++)
-      {
-         quadForm[j] = quadForm1[j];
-         loggauss[j] = loggauss1[j];
-      }
-   }
-}
-
 void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, double **Tau, double **UtU, double **UtX, double *xx, double *q1, double q2, double *s2, double *quadForm, _Bool **Gam, double *loggauss)
 {
    int l, j;
@@ -199,7 +148,7 @@ void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, do
          logGausQuadForm(0, r, n, Tau, UtU, UtX, xx[0], s2[0], &quad2, Gamnew[0], &loggaussnew);
          double rat = loggaussnew + log(q2) - loggaussold - log(1 - q2);
          double uni = gsl_ran_flat(rr, 0, 1);
-         // printf("RAT=%.2lf",rat);
+         // Rprintf("RAT=%.2lf",rat);
          if (log(uni / (1 - uni)) < rat)
          {
             Gamnew[0][l] = Gam[0][l] = rho[l] = 1;
@@ -241,7 +190,7 @@ void SamplerhoGamma(gsl_rng *rr, int r, int n, int IndVar, int p, _Bool *rho, do
                Gamnew[j][l] = 1;
                logGausQuadForm(j, r, n, Tau, UtU, UtX, xx[j], s2[j], &quad2, Gamnew[j], &loggaussnew);
                double rat = -loggaussold + loggaussnew + log(q1[l]) - log(1 - q1[l]);
-               // printf("%lf ",rat);
+               // Rprintf("%lf ",rat);
                double x1 = loggaussnew + log(q1[l]);
                double x2 = loggaussold + log(1 - q1[l]);
                double maxq = MAX(x1, x2);
@@ -416,7 +365,7 @@ void sigma2(gsl_rng *rr, int p, int n, double a0, double b0, double *quadForm, d
    }
 }
 
-void EffectZero(int l, gsl_rng *rr, int K, int p, _Bool rho, _Bool *R, double *B, double *B0, _Bool **Path, double alphab0, double betab0, double alpha, double *lambda2, double *AcceptB0, _Bool **Gam, double sdB0)
+void EffectZero(int l, gsl_rng *rr, int K, int p, _Bool rho, double *B, double *B0, _Bool **Path, double alphab0, double betab0, double alpha, double *lambda2, double *AcceptB0, _Bool **Gam, double sdB0)
 {
    /* Random walk on log(B0): B0new = B0 exp(sdB0 * N(0,1)). The Jacobian of the log
     * transform adds log(B0new/B0) to the acceptance ratio. */
@@ -478,7 +427,7 @@ void TauLambda(int l, gsl_rng *rr, int K, int p, double *A, double *B, double B0
          if (!isfinite(Tau[j]) || (Tau[j] <= 0))
          {
             Tau[j] = 1 / mu + 1 / (2 * lambda2[j]);
-            // printf("J=%d, MU=%lf, lamb=%lf, S2=%lf, Beta=%lf B0=%lf\n", j,mu,lambda2[j],s2[j],A[j],B0);
+            // Rprintf("J=%d, MU=%lf, lamb=%lf, S2=%lf, Beta=%lf B0=%lf\n", j,mu,lambda2[j],s2[j],A[j],B0);
          }
          double kb = 0;
          for (k1 = 0; k1 < K; k1++)
@@ -490,7 +439,7 @@ void TauLambda(int l, gsl_rng *rr, int K, int p, double *A, double *B, double B0
       else
       {
          Tau[j] = gsl_ran_exponential(rr, 1.0 / lambda2[j]);
-         // printf("Tau=%lf ",Tau[j]);
+         // Rprintf("Tau=%lf ",Tau[j]);
          // lambda2[j]=gsl_ran_gamma (rr, alpha+1, 1/(Tau[j]));
          lambda2[j] = gsl_ran_gamma(rr, alpha, 1 / B0);
       }
@@ -509,7 +458,7 @@ static double groupsum(int K, _Bool *Pathj, double *B)
    return kb;
 }
 
-void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *A, double *B, double B0, double *Tau, _Bool **Path, double alphab, double betab, double w, double alpha, double *lambda2, double *s2, double *AcceptR, _Bool **Gam)
+void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *B, double B0, _Bool **Path, double alphab, double betab, double w, double alpha, double *lambda2, double *AcceptR, _Bool **Gam)
 {
    /* K is the number of pathways
     * R is the binary vector for pathway effect
@@ -657,7 +606,7 @@ void GroupEffect(int l, gsl_rng *rr, _Bool rho, int K, int p, _Bool *R, double *
    } // End for else if (rho==0)
 } // close for the function
 
-void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **A, double **UtU, double **UtX, double *s2, _Bool **Gam)
+void LoadAOther(gsl_rng *rr, int r, int p, double **Tau, double **A, double **UtU, double **UtX, double *s2, _Bool **Gam)
 {
    int s, s1, j;
    double Aold[r];
@@ -711,7 +660,7 @@ void LoadAOther(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, doub
    }
 }
 
-void EstimateLoad(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, double **A, double **UtU, double **UtX, double *s2, _Bool **Gam)
+void EstimateLoad(int r, int p, double **Tau, double **A, double **UtU, double **UtX, double *s2, _Bool **Gam)
 {
    int s, s1, j;
    for (j = 0; j < p; j++)
@@ -755,34 +704,6 @@ void EstimateLoad(gsl_rng *rr, int r, int n, int p, _Bool *rho, double **Tau, do
          free(SigmaInv);
          gsl_vector_free(mu);
       }
-   }
-}
-
-void proposal(int n, _Bool R[n], _Bool R1[n], float phi, gsl_rng *r)
-{
-   int i;
-   for (i = 0; i < n; i++)
-      R1[i] = R[i];
-   int n1 = 0; // number of 1
-   int n0 = 0; // number of zeros
-   int v1[n];
-   findc(n, R, 1, v1, &n0); // find indices different from 1 i.e ==0;
-   int v2[n - n0];
-   findc(n, R, 0, v2, &n1); // find indices different of zeros i.e ==1
-   double u = gsl_ran_flat(r, 0, 1);
-   if ((u < phi) || (n0 == 0) || (n1 == 0))
-   {
-      int l = gsl_rng_uniform_int(r, n);
-
-      R1[l] = 1 - R[l];
-   }
-   else
-   {
-      int l1 = gsl_rng_uniform_int(r, n0);
-      int l2 = gsl_rng_uniform_int(r, n1);
-
-      R1[v1[l1]] = R[v2[l2]];
-      R1[v2[l2]] = R[v1[l1]];
    }
 }
 

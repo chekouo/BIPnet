@@ -94,8 +94,8 @@ _Bool **UniqueModel(int nbrsample, int p, _Bool **rhosample, int *modelidx, int 
       UniqModel[i][j] = rhosample[modelidx[i]][j];
     }
   }
-  printf("\n\n\nNumber of models is= %d", countd);
-  printf("\n");
+  Rprintf("\n\n\nNumber of models is= %d", countd);
+  Rprintf("\n");
   return UniqModel;
 }
 
@@ -134,101 +134,6 @@ int multivariate_gaussian(const gsl_rng *r,
     // gsl_blas_dtrmv(CblasLower, CblasNoTrans, CblasNonUnit, L, result);
     gsl_vector_add(result, mu);
 
-    return GSL_SUCCESS;
-  }
-}
-
-int logmultigaussianT(const gsl_vector *x, const gsl_vector *y,
-                      const gsl_matrix *L,
-                      double *result, double *quadF,
-                      gsl_vector *work)
-{
-  const size_t M = L->size1;
-  const size_t N = x->size;
-  size_t i;
-  double quadForm = 0;        /* (x)' Sigma^{-1} (x) */
-  double logSqrtDetSigma = 0; /* log [ sqrt(|Sigma|) ] */
-
-  /* compute: work = x - mu*/
-  for (i = 0; i < M; ++i)
-  {
-    double xi = gsl_vector_get(y, i);
-    // double mui = gsl_vector_get(mu, i);
-    gsl_vector_set(work, i, xi);
-  }
-
-  /* compute: work = L^{-1} * (x - mu) */
-  gsl_blas_dtrsv(CblasLower, CblasNoTrans, CblasNonUnit, L, work);
-
-  /* compute: quadForm = (x - mu)' Sigma^{-1} (x - mu) */
-  gsl_blas_ddot(work, work, &quadForm);
-  double x2 = 0;
-  gsl_blas_ddot(x, x, &x2);
-  quadForm = x2 - quadForm;
-  /* compute: log [ sqrt(|Sigma|) ] = sum_i log L_{ii} */
-  for (i = 0; i < M; ++i)
-  {
-    double Lii = gsl_matrix_get(L, i, i);
-    logSqrtDetSigma += log(Lii);
-  }
-
-  *quadF = quadForm;
-  *result = -0.5 * quadForm - logSqrtDetSigma - 0.5 * N * log(2.0 * M_PI);
-  return GSL_SUCCESS;
-}
-
-int logmultigaussian(const gsl_vector *x,
-                     const gsl_vector *mu,
-                     const gsl_matrix *L,
-                     double *result, double *quadF,
-                     gsl_vector *work)
-{
-  const size_t M = L->size1;
-  const size_t N = L->size2;
-  if (M != N)
-  {
-    GSL_ERROR("requires square matrix", GSL_ENOTSQR);
-  }
-  else if (mu->size != M)
-  {
-    GSL_ERROR("incompatible dimension of mean vector with variance-covariance matrix", GSL_EBADLEN);
-  }
-  else if (x->size != M)
-  {
-    GSL_ERROR("incompatible dimension of quantile vector", GSL_EBADLEN);
-  }
-  else if (work->size != M)
-  {
-    GSL_ERROR("incompatible dimension of work vector", GSL_EBADLEN);
-  }
-  else
-  {
-    size_t i;
-    double quadForm = 0;        /* (x - mu)' Sigma^{-1} (x - mu) */
-    double logSqrtDetSigma = 0; /* log [ sqrt(|Sigma|) ] */
-
-    /* compute: work = x - mu */
-    for (i = 0; i < M; ++i)
-    {
-      double xi = gsl_vector_get(x, i);
-      double mui = gsl_vector_get(mu, i);
-      gsl_vector_set(work, i, xi - mui);
-    }
-
-    /* compute: work = L^{-1} * (x - mu) */
-    gsl_blas_dtrsv(CblasLower, CblasNoTrans, CblasNonUnit, L, work);
-
-    /* compute: quadForm = (x - mu)' Sigma^{-1} (x - mu) */
-    gsl_blas_ddot(work, work, &quadForm);
-
-    /* compute: log [ sqrt(|Sigma|) ] = sum_i log L_{ii} */
-    for (i = 0; i < M; ++i)
-    {
-      double Lii = gsl_matrix_get(L, i, i);
-      logSqrtDetSigma += log(Lii);
-    }
-    *quadF = quadForm;
-    *result = -0.5 * quadForm - logSqrtDetSigma - 0.5 * M * log(2.0 * M_PI);
     return GSL_SUCCESS;
   }
 }
@@ -272,53 +177,6 @@ void sort(int n, double *x, int *idx)
   }
 }
 
-double auc(int n, double *esti, _Bool class[n])
-{
-  double fpr[n + 2], tpr[n + 2];
-  double auc1 = 0;
-  int P = 0; // P=positive instances
-  int i, j;
-  double esti1[n];
-  for (i = 0; i < n; i++)
-  {
-    esti1[i] = esti[i];
-    if (class[i] == 1)
-      P += 1;
-  }
-  int idx[n];
-  sort(n, esti1, idx);
-  fpr[n + 1] = 1;
-  tpr[n + 1] = 1;
-  fpr[0] = 0;
-  tpr[0] = 0;
-  for (i = n; i >= 1; --i)
-  {
-    double af = 0;
-    double at = 0;
-    for (j = 0; j < n; j++)
-    {
-      if (esti[j] > esti1[i - 1])
-      {
-        if (class[j] == 0)
-        {
-          af += 1;
-        }
-        else
-        {
-          at += 1;
-        }
-      }
-    }
-    tpr[i] = at / P;
-    fpr[i] = af / (n - P);
-    auc1 += (fpr[i + 1] - fpr[i]) * (tpr[i + 1] + tpr[i]);
-  }
-  auc1 += (fpr[1] - fpr[0]) * (tpr[1] + tpr[0]);
-  auc1 = 0.5 * (auc1);
-  return auc1;
-}
-
-
 double **dmatrix(int nrl, int nrh, int ncl, int nch)
 {
   int i;
@@ -341,10 +199,7 @@ double **dmatrix(int nrl, int nrh, int ncl, int nch)
 
 void nrerror(char error_text[])
 {
-  printf("Utils run-time error...\n");
-  printf("%s\n", error_text);
-  printf("...now exiting to system...\n");
-  exit(1);
+  Rf_error("BIPnet: %s", error_text); // returns to R with an error instead of ending the R session
 }
 void free_dmatrix(double **m, int nrl, int nrh, int ncl, int nch)
 {
@@ -466,17 +321,115 @@ int safe_cholesky(double *M, int d, const char *where)
     if (status == GSL_SUCCESS)
     {
       if (nwarn < 10)
-        printf("\nWarning (%s): matrix not positive definite, a ridge of %g x mean diagonal was added.\n", where, ridge[k]);
+        Rprintf("\nWarning (%s): matrix not positive definite, a ridge of %g x mean diagonal was added.\n", where, ridge[k]);
       nwarn++;
       return GSL_SUCCESS;
     }
   }
 fail:
   if (nwarn < 10)
-    printf("\nWarning (%s): Cholesky factorisation failed (%s); this update is skipped.\n", where,
+    Rprintf("\nWarning (%s): Cholesky factorisation failed (%s); this update is skipped.\n", where,
            nonfinite ? "non-finite entries" : "not positive definite even after adding a ridge");
   if (nwarn == 9)
-    printf("Further warnings of this kind are not printed.\n");
+    Rprintf("Further warnings of this kind are not printed.\n");
   nwarn++;
   return GSL_EDOM;
+}
+
+/* Assignment maximising sum_l w[l][perm[l]] over the permutations of 0..r-1 (Hungarian
+ * algorithm, O(r^3)). Row l of w is a reference component, column k a current component. */
+void max_assignment(int r, double **w, int *perm)
+{
+  double u[r + 1], v[r + 1], minv[r + 1];
+  int p[r + 1], way[r + 1], i, j;
+  _Bool used[r + 1];
+  for (j = 0; j <= r; j++)
+  {
+    u[j] = v[j] = 0;
+    p[j] = way[j] = 0;
+  }
+  for (i = 1; i <= r; i++)
+  {
+    int j0 = 0;
+    p[0] = i;
+    for (j = 0; j <= r; j++)
+    {
+      minv[j] = INFINITY;
+      used[j] = 0;
+    }
+    do
+    {
+      int i0 = p[j0], j1 = 0;
+      double delta = INFINITY;
+      used[j0] = 1;
+      for (j = 1; j <= r; j++)
+        if (!used[j])
+        {
+          double cur = -w[i0 - 1][j - 1] - u[i0] - v[j];
+          if (cur < minv[j])
+          {
+            minv[j] = cur;
+            way[j] = j0;
+          }
+          if (minv[j] < delta)
+          {
+            delta = minv[j];
+            j1 = j;
+          }
+        }
+      for (j = 0; j <= r; j++)
+      {
+        if (used[j])
+        {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        }
+        else
+          minv[j] -= delta;
+      }
+      j0 = j1;
+    } while (p[j0] != 0);
+    do
+    {
+      int j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0);
+  }
+  for (j = 1; j <= r; j++)
+    perm[p[j] - 1] = j - 1;
+}
+
+/* Signed permutation that best matches the components of U (n x r) to those of Uref:
+ * reference component l corresponds to current component perm[l] with sign sgn[l], chosen to
+ * maximise sum_l |corr(Uref[,l], U[,perm[l]])|. C (r x r) is workspace. */
+void align_components(int n, int r, double **Uref, double **U, int *perm, int *sgn, double **C)
+{
+  int i, l, k;
+  double nref[r], ncur[r];
+  for (l = 0; l < r; l++)
+  {
+    nref[l] = ncur[l] = 0;
+    for (k = 0; k < r; k++)
+      C[l][k] = 0;
+  }
+  for (i = 0; i < n; i++)
+    for (l = 0; l < r; l++)
+    {
+      nref[l] += Uref[i][l] * Uref[i][l];
+      ncur[l] += U[i][l] * U[i][l];
+      for (k = 0; k < r; k++)
+        C[l][k] += Uref[i][l] * U[i][k];
+    }
+  for (l = 0; l < r; l++)
+    for (k = 0; k < r; k++)
+      C[l][k] = (nref[l] > 0 && ncur[k] > 0) ? C[l][k] / sqrt(nref[l] * ncur[k]) : 0;
+  double **W = dmatrix(0, r - 1, 0, r - 1);
+  for (l = 0; l < r; l++)
+    for (k = 0; k < r; k++)
+      W[l][k] = fabs(C[l][k]);
+  max_assignment(r, W, perm);
+  free_dmatrix(W, 0, r - 1, 0, r - 1);
+  for (l = 0; l < r; l++)
+    sgn[l] = (C[l][perm[l]] < 0) ? -1 : 1;
 }

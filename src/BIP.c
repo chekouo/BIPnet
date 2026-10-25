@@ -25,7 +25,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				  double *EstU, double *EstSig2, double *InterceptMean, double *EstLoadMod, double *EstLoad,
 				  int *nbrmodel1, double *postgam, double *priorcompsel, double *priorcompselo,
 				  double *priorb0, double *priorb, double *priorgrpsel, double *probvarsel, int *chainNbr,
-				  double *AcceptB0Rate)
+				  double *AcceptB0Rate, int *relabel1, double *RelabelInfo)
 {
 
 	/* GSL errors (e.g. a matrix that is not positive definite) are returned as status codes and
@@ -35,38 +35,36 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	gsl_rng *rr = gsl_rng_alloc(gsl_rng_rand48);
 	gsl_rng_set(rr, seed);
 
-	setvbuf(stdout, NULL, _IONBF, 0);
 	int Method = Method1[0];
 	if (Method == 1)
-		printf("\nThe Method is BIP with network information\n");
+		Rprintf("\nThe Method is BIP with network information\n");
 	else if (Method == 0)
 	{
-		printf("The Method is BIP without network information\n");
+		Rprintf("The Method is BIP without network information\n");
 	}
 	int i, l, j, k;
 	int m;
 	clock_t t1 = clock();
 	int Np = Np1[0]; // Nber of platforms
 	int nbrsample = nbrsample1[0];
-	printf("Number of MCMC samples after burn-in is %d\n", nbrsample);
+	Rprintf("Number of MCMC samples after burn-in is %d\n", nbrsample);
 	int burninsample = burninsample1[0];
-	printf("Number of burn-in is %d\n", burninsample);
+	Rprintf("Number of burn-in is %d\n", burninsample);
 	if ((nbrsample < 1) || (burninsample < 0))
 	{ // the posterior means, UniqueModel and the model averaging need at least one sample after burn-in
-		printf("Error: the number of MCMC samples after burn-in must be at least 1 and burn-in cannot be negative.\n");
 		gsl_rng_free(rr);
 		gsl_set_error_handler(old_handler);
-		return;
+		Rf_error("The number of MCMC samples after burn-in must be at least 1 and burn-in cannot be negative.");
 	}
 	int n = n1[0];
-	printf("Number of samples is %d\n", n);
+	Rprintf("Number of samples is %d\n", n);
 	// int p0=P[0];
 	for (m = 0; m < Np; m++)
 	{
-		printf("Number of markers in platform %d is %d\n", m, P[m]);
+		Rprintf("Number of markers in platform %d is %d\n", m, P[m]);
 	}
 	int r = r1[0];
-	printf("Number of components is %d\n", r);
+	Rprintf("Number of components is %d\n", r);
 	// int P[Np];P[0]=p0;P[1]=p1;;P[2]=p2;
 	double ***X = malloc(Np * sizeof(double **));
 	double ***X1 = malloc(Np * sizeof(double **));
@@ -89,8 +87,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	/*
 	for (m=0;m<Np;m++){
 	if (IndVar[m]!=1)
-	printf("Number of groups for platform %d is %d\n",m,K[m]);
-	else printf("Number of groups for outcome is 1");
+	Rprintf("Number of groups for platform %d is %d\n",m,K[m]);
+	else Rprintf("Number of groups for outcome is 1");
 	}
 	*/
 	_Bool ***Path = malloc(Np * sizeof(_Bool **));
@@ -201,6 +199,9 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	double **AcceptB0 = malloc(Np * sizeof(double *));
 	double **TryB0 = malloc(Np * sizeof(double *)); // number of MH attempts for B0 after burn-in
 	double **sdB0 = malloc(Np * sizeof(double *));  // step size of the log(B0) random walk, tuned during burn-in
+	double **tryB0t = malloc(Np * sizeof(double *)); // this iteration: was an MH move for B0 made, and accepted?
+	double **accB0t = malloc(Np * sizeof(double *));
+	double **AccB0a = malloc(Np * sizeof(double *)); // accepted B0 moves after burn-in, in the (aligned) output labels
 	double **quadForm = malloc(Np * sizeof(double *));
 	double **loggauss = malloc(Np * sizeof(double *));
 	double **s2 = malloc(Np * sizeof(double *));
@@ -225,6 +226,9 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		AcceptB0[m] = malloc(r * sizeof(double));
 		TryB0[m] = malloc(r * sizeof(double));
 		sdB0[m] = malloc(r * sizeof(double));
+		tryB0t[m] = malloc(r * sizeof(double));
+		accB0t[m] = malloc(r * sizeof(double));
+		AccB0a[m] = malloc(r * sizeof(double));
 		Tau[m] = dmatrix(0, r - 1, 0, P[m] - 1);
 		Taumean[m] = dmatrix(0, r - 1, 0, P[m] - 1);
 		for (l = 0; l < r; l++)
@@ -235,6 +239,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			AcceptB0[m][l] = 0;
 			TryB0[m][l] = 0;
 			sdB0[m][l] = 1;
+			tryB0t[m][l] = accB0t[m][l] = AccB0a[m][l] = 0;
 			for (j = 0; j < P[m]; j++)
 				Gammean[m][j][l] = 0;
 			double uni = gsl_ran_flat(rr, 0, 1);
@@ -351,6 +356,17 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		UtX[m] = dmatrix(0, r - 1, 0, P[m] - 1);
 		xx[m] = malloc(P[m] * sizeof(double));
 	}
+	/* Label switching: after burn-in, component l of the output summaries is matched to component
+	 * perm[l] of the current draw, with sign sgn[l] (signed permutation maximising the absolute
+	 * correlations between U and Uref, the running mean of the aligned draws). The matching is always
+	 * computed and reported in RelabelInfo; the summaries use it only when relabel is 1. */
+	int relabel = relabel1[0];
+	int *perm = malloc(r * sizeof(int)), *sgn = malloc(r * sizeof(int));
+	int *prevperm = malloc(r * sizeof(int)), *prevsgn = malloc(r * sizeof(int));
+	int *op = malloc(r * sizeof(int)), *os = malloc(r * sizeof(int)); // labelling used for the summaries
+	double **Uref = dmatrix(0, n - 1, 0, r - 1);
+	double **Cls = dmatrix(0, r - 1, 0, r - 1);
+	double nswitch = 0, nflip = 0, nnotid = 0;
 	_Bool **rhomodel = malloc(nbrsample * sizeof(_Bool *));
 	for (t = 0; t < nbrsample; t++)
 	{
@@ -412,7 +428,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			}
 
 			sigma2(rr, P[m], n, a0, b0, quadForm[m], s2[m]);
-			LoadAOther(rr, r, n, P[m], rhoest[m], Tau[m], A[m], UtU, UtX[m], s2[m], Gam[m]);
+			LoadAOther(rr, r, P[m], Tau[m], A[m], UtU, UtX[m], s2[m], Gam[m]);
 
 			for (l = 0; l < r; l++)
 			{
@@ -426,12 +442,12 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 					for (k = 0; k < K[m]; k++)
 						sumrho += R[m][l][k];
 					wg[m][l] = gsl_ran_beta(rr, alg + rhoest[m][l] * sumrho, blg + rhoest[m][l] * (K[m] - sumrho));
-					GroupEffect(l, rr, rhoest[m][l], K[m], P[m], R[m][l], A[m][l], B[m][l], B0[m][l], Tau[m][l], Path[m], alphab, betab, wg[m][l], alpha, lambda2[m][l], s2[m], AcceptR[m][l], Gam[m]);
+					GroupEffect(l, rr, rhoest[m][l], K[m], P[m], R[m][l], B[m][l], B0[m][l], Path[m], alphab, betab, wg[m][l], alpha, lambda2[m][l], AcceptR[m][l], Gam[m]);
 				}
-				if ((t >= burninsample) && (rhoest[m][l] == 1))
-					TryB0[m][l] += 1; // EffectZero makes an MH move only when rho == 1
+				tryB0t[m][l] = (rhoest[m][l] == 1); // EffectZero makes an MH move only when rho == 1
 				double acc0 = AcceptB0[m][l];
-				EffectZero(l, rr, K[m], P[m], rhoest[m][l], R[m][l], B[m][l], &B0[m][l], Path[m], alphab0, betab0, alpha, lambda2[m][l], &AcceptB0[m][l], Gam[m], sdB0[m][l]);
+				EffectZero(l, rr, K[m], P[m], rhoest[m][l], B[m][l], &B0[m][l], Path[m], alphab0, betab0, alpha, lambda2[m][l], &AcceptB0[m][l], Gam[m], sdB0[m][l]);
+				accB0t[m][l] = AcceptB0[m][l] - acc0;
 				if ((t < burninsample) && (rhoest[m][l] == 1))
 				{ // Robbins-Monro tuning towards an acceptance rate of 0.44; the step size is fixed after burn-in
 					sdB0[m][l] *= exp((AcceptB0[m][l] - acc0 - 0.44) / sqrt(t + 1.0));
@@ -454,6 +470,50 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 
 		if (t >= burninsample)
 		{
+			int ta = t - burninsample;
+			if (ta == 0)
+			{ // the first draw after burn-in is the initial reference
+				for (l = 0; l < r; l++)
+				{
+					perm[l] = l;
+					sgn[l] = 1;
+				}
+			}
+			else
+			{
+				align_components(n, r, Uref, U, perm, sgn, Cls);
+				int pchg = 0, schg = 0;
+				for (l = 0; l < r; l++)
+				{
+					if (perm[l] != prevperm[l])
+						pchg = 1;
+					else if (sgn[l] != prevsgn[l])
+						schg = 1;
+				}
+				nswitch += pchg;
+				nflip += (!pchg) && schg;
+			}
+			int notid = 0;
+			for (l = 0; l < r; l++)
+			{
+				if ((perm[l] != l) || (sgn[l] != 1))
+					notid = 1;
+				prevperm[l] = perm[l];
+				prevsgn[l] = sgn[l];
+				op[l] = relabel ? perm[l] : l;
+				os[l] = relabel ? sgn[l] : 1;
+			}
+			nnotid += notid;
+			for (i = 0; i < n; i++) // running mean of the aligned draws; the first draw sets it (Uref is not initialised)
+				for (l = 0; l < r; l++)
+					Uref[i][l] = (ta == 0) ? U[i][l] : (ta * Uref[i][l] + sgn[l] * U[i][perm[l]]) / (ta + 1.0);
+			for (m = 0; m < Np; m++)
+				for (l = 0; l < r; l++)
+				{
+					TryB0[m][l] += tryB0t[m][op[l]];
+					AccB0a[m][l] += accB0t[m][op[l]];
+				}
+
 			*InterceptMean += intercp / nbrsample;
 			int rm = 0;
 			for (m = 0; m < Np; m++)
@@ -462,7 +522,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				{
 					for (l = 0; l < r; l++)
 					{
-						rhomodel[t - burninsample][rm] = Gam[m][j][l];
+						rhomodel[t - burninsample][rm] = Gam[m][j][op[l]];
 						rm++;
 					}
 				}
@@ -473,7 +533,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 				{
 					for (l = 0; l < r; l++)
 					{
-						rhomodel[t - burninsample][rm] = rhoest[m][l];
+						rhomodel[t - burninsample][rm] = rhoest[m][op[l]];
 						rm++;
 					}
 				}
@@ -483,7 +543,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 			{
 				for (i = 0; i < n; i++)
 				{
-					meanU[i][l] += U[i][l] / nbrsample;
+					meanU[i][l] += os[l] * U[i][op[l]] / nbrsample;
 				}
 			}
 			for (m = 0; m < Np; m++)
@@ -494,8 +554,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 					int xx = 1;
 					for (l = 0; l < r; l++)
 					{
-						Gammean[m][j][l] += (double)Gam[m][j][l] / nbrsample;
-						Taumean[m][l][j] += Tau[m][l][j] / nbrsample;
+						Gammean[m][j][l] += (double)Gam[m][j][op[l]] / nbrsample;
+						Taumean[m][l][j] += Tau[m][op[l]][j] / nbrsample;
 						xx *= 1 - Gam[m][j][l];
 					}
 					if (xx == 0)
@@ -504,24 +564,47 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 
 				for (l = 0; l < r; l++)
 				{
-					B0mean[m][l] += B0[m][l] / nbrsample;
-					rhomean[m][l] += (double)rhoest[m][l] / nbrsample;
+					B0mean[m][l] += B0[m][op[l]] / nbrsample;
+					rhomean[m][l] += (double)rhoest[m][op[l]] / nbrsample;
 					for (k = 0; k < K[m]; k++)
 					{
-						Rmean[m][l][k] += (double)R[m][l][k] / nbrsample;
-						Bmean[m][l][k] += B[m][l][k] / nbrsample;
+						Rmean[m][l][k] += (double)R[m][op[l]][k] / nbrsample;
+						Bmean[m][l][k] += B[m][op[l]][k] / nbrsample;
 					}
 				}
 			}
 
 			if (t % ((N + 5) / 5) == 1)
 			{
-				printf("\n");
-				printf("The number of iterations is  %d\n", t);
+				Rprintf("\n");
+				Rprintf("The number of iterations is  %d\n", t);
 			}
 		}
 	}
-	printf("\n");
+	Rprintf("\n");
+	RelabelInfo[0] = nswitch;
+	RelabelInfo[1] = nflip;
+	RelabelInfo[2] = 100 * nnotid / nbrsample;
+	if (relabel)
+	{
+		Rprintf("Label switching: %.0f label swaps and %.0f sign flips after burn-in; %.1f%% of the draws were relabelled.\n", nswitch, nflip, RelabelInfo[2]);
+		for (m = 0; m < Np; m++)
+		{ // rows of Tau are separate allocations, so permuting the row pointers is enough
+			double *rows[r];
+			for (l = 0; l < r; l++)
+				rows[l] = Tau[m][op[l]];
+			for (l = 0; l < r; l++)
+				Tau[m][l] = rows[l];
+		}
+	}
+	free(perm);
+	free(sgn);
+	free(prevperm);
+	free(prevsgn);
+	free(op);
+	free(os);
+	free_dmatrix(Uref, 0, n - 1, 0, r - 1);
+	free_dmatrix(Cls, 0, r - 1, 0, r - 1);
 	
 	int sumP = 0;
 	int sumK = 0;
@@ -553,7 +636,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		for (l = 0; l < r; l++)
 		{
 			IntGrpMean[m * r + l] = B0mean[m][l];
-			AcceptB0Rate[m * r + l] = (TryB0[m][l] > 0) ? AcceptB0[m][l] / TryB0[m][l] : -1; // -1: never active
+			AcceptB0Rate[m * r + l] = (TryB0[m][l] > 0) ? AccB0a[m][l] / TryB0[m][l] : -1; // -1: never active
 		}
 		sumP += P[m];
 		sumK += K[m];
@@ -680,7 +763,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		}
 		for (m = 0; m < Np; m++)
 		{
-			EstimateLoad(rr, r, n, P[m], rhoest[m], Taumean[m], A[m], UtU, UtX[m], s2Mean[m], Gam[m]);
+			EstimateLoad(r, P[m], Taumean[m], A[m], UtU, UtX[m], s2Mean[m], Gam[m]);
 			for (l = 0; l < r; l++)
 			{
 				for (j = 0; j < P[m]; j++)
@@ -724,7 +807,7 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		}
 		// X1: the response centred by InterceptMean, as for EstLoadMod; X1[m] == X[m] for the other data types
 		crossprod(n, r, P[m], meanU, X1[m], UtX[m]);
-		EstimateLoad(rr, r, n, P[m], rhoest[m], Taumean[m], A[m], UtU, UtX[m], s2Mean[m], Gam[m]);
+		EstimateLoad(r, P[m], Taumean[m], A[m], UtU, UtX[m], s2Mean[m], Gam[m]);
 
 		for (l = 0; l < r; l++)
 		{
@@ -773,6 +856,9 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 		free(AcceptB0[m]);
 		free(TryB0[m]);
 		free(sdB0[m]);
+		free(tryB0t[m]);
+		free(accB0t[m]);
+		free(AccB0a[m]);
 		free(qv[m]);
 		free(wg[m]);
 		free_dmatrix(UtX[m], 0, r - 1, 0, P[m] - 1);
@@ -806,6 +892,9 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 	free(AcceptB0);
 	free(TryB0);
 	free(sdB0);
+	free(tryB0t);
+	free(accB0t);
+	free(AccB0a);
 	free(Path);
 	free(AcceptR);
 	free(Rmean);
@@ -813,8 +902,8 @@ void mainfunction(int *Method1, int *n1, int *P, int *r1, int *Np1, double *data
 
 	t1 = clock() - t1;
 	double time_taken = ((double)t1) / CLOCKS_PER_SEC; // in seconds
-	printf("\n\nTime taken in seconds is %f\n", time_taken);
-	printf("\nTime taken in minutes is %f\n", time_taken / 60);
+	Rprintf("\n\nTime taken in seconds is %f\n", time_taken);
+	Rprintf("\nTime taken in minutes is %f\n", time_taken / 60);
 	gsl_set_error_handler(old_handler);
 	
 }

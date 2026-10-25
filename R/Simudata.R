@@ -310,7 +310,7 @@ Simulate<-function(scenario=1,setting=NULL,overlap=NULL,seed=1,seedA=1){
  # library(MASS)
   n=200;
   sigma2u=1;
-  U=mvrnorm(n,mu=rep(0,r),sigma2u*diag(r))
+  U=MASS::mvrnorm(n,mu=rep(0,r),sigma2u*diag(r))
   A3=c(1, 0, 1, 1)#'; %components 1, 3, and 4 affect response
   E1=MASS::mvrnorm(n, mu=rep(0,P), Sigma1);
   E2=MASS::mvrnorm(n, mu=rep(0,Q), Sigma2);
